@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>한눈에 보는 정렬 실험실</title>
+<meta name="description" content="숫자 카드 5장으로 버블·선택·삽입 정렬을 한 단계씩 눈으로 이해하는 수업용 시각화 도구">
+<style>
+/* ==========================================================
+   한눈에 보는 정렬 실험실 — 수업(빔프로젝터) 최적화 시각화 도구
+   단일 파일 · 오프라인 · 외부 요청 0
+   상태색: 비교=노랑 · 확정=초록 · 주인공(최솟값/든 카드)=보라
+   ========================================================== */
+:root {
+  --bg: #F5F7FA;
+  --card: #FFFFFF;
+  --ink: #1E293B;
+  --muted: #64748B;
+  --line: #E2E8F0;
+  --accent: #2563EB;        /* UI 조작부 */
+  --accent-dark: #1E40AF;
+  --cmp: #FACC15;           /* 비교 중 */
+  --done: #16A34A;          /* 자리 확정 */
+  --done-soft: #EAF7EE;
+  --hero: #7C3AED;          /* 왕관 후보 / 든 카드 */
+  --radius: 16px;
+  --shadow: 0 4px 18px rgba(30, 41, 59, .08);
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Pretendard Variable', Pretendard, 'Malgun Gothic', -apple-system, sans-serif;
+  background: var(--bg); color: var(--ink);
+  line-height: 1.65; min-height: 100vh;
+}
+button:focus-visible, input:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+/* ---------- 헤더 ---------- */
+header { max-width: 980px; margin: 0 auto; padding: 40px 20px 6px; text-align: center; }
+h1 { font-size: clamp(26px, 4.5vw, 40px); font-weight: 900; letter-spacing: -.02em; }
+h1 .a { color: var(--accent); }
+.sub { color: var(--muted); margin-top: 8px; font-size: 16px; }
+
+/* ---------- 알고리즘 탭 ---------- */
+.algo-tabs { display: flex; gap: 10px; justify-content: center; margin: 22px auto 0; flex-wrap: wrap; padding: 0 20px; }
+.algo-tab {
+  font-family: inherit; font-size: 16.5px; font-weight: 800; cursor: pointer;
+  background: var(--card); color: var(--muted);
+  border: 2px solid var(--line); border-radius: 99px; padding: 10px 26px;
+  transition: border-color .15s, color .15s, transform .15s;
+}
+.algo-tab:hover { border-color: var(--accent); color: var(--ink); transform: translateY(-2px); }
+.algo-tab.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* ---------- 무대 ---------- */
+main { max-width: 980px; margin: 0 auto; padding: 18px 20px 70px; }
+.stage-wrap {
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: var(--shadow); padding: 26px 26px 18px; margin-top: 16px;
+}
+.stage { position: relative; height: 300px; }
+.baseline { position: absolute; left: 0; right: 0; bottom: 42px; height: 3px; background: var(--line); border-radius: 2px; }
+.slot-label { position: absolute; bottom: 12px; font-size: 14px; font-weight: 800; color: var(--muted); width: var(--cw); text-align: center; }
+
+.ncard {
+  position: absolute; bottom: 45px; width: var(--cw);
+  background: var(--card); border: 3px solid var(--ink); border-radius: 14px;
+  display: flex; align-items: flex-start; justify-content: center;
+  font-weight: 900; font-size: clamp(22px, 4vw, 34px); padding-top: 8px;
+  transition: left .28s cubic-bezier(.25, 1, .4, 1), transform .22s ease, border-color .15s, background .2s;
+  box-shadow: 0 3px 10px rgba(30, 41, 59, .12);
+}
+.ncard .crown { position: absolute; top: -34px; left: 50%; transform: translateX(-50%); font-size: 24px; display: none; }
+.ncard.key { border-color: var(--hero); }
+.ncard.key .crown { display: block; }
+.ncard.cmp { border-color: var(--cmp); background: #FFFBE8; transform: translateY(-12px); }
+.ncard.held { border-color: var(--hero); background: #F5F0FE; transform: translateY(-56px) scale(1.05); z-index: 5; box-shadow: 0 12px 24px rgba(124, 58, 237, .3); }
+.ncard.done { border-color: var(--done); background: var(--done-soft); }
+.ncard.done::after { content: '✓'; position: absolute; bottom: 4px; right: 8px; font-size: 15px; font-weight: 900; color: var(--done); }
+.ncard.dim { opacity: .32; }                       /* 탐색 배제 / 퀵 비활성 구간 */
+.target {
+  display: none; text-align: center; font-size: 19px; font-weight: 900;
+  background: #FFFBE8; border: 2px solid var(--cmp); border-radius: 12px;
+  padding: 8px 16px; margin-bottom: 14px;
+}
+.target b { color: #A16207; font-size: 23px; }
+body.search .target { display: block; }
+body.search #swpWrap { display: none; }            /* 탐색 모드엔 이동 카운터 무의미 */
+
+/* ---------- 내레이션 ---------- */
+.narr {
+  margin-top: 6px; min-height: 62px;
+  background: var(--bg); border-left: 5px solid var(--accent); border-radius: 10px;
+  padding: 13px 18px; font-size: clamp(16px, 2.6vw, 20px); font-weight: 700;
+  display: flex; align-items: center;
+}
+.narr b { color: var(--accent-dark); }
+.narr .y { color: #A16207; } .narr .g { color: var(--done); } .narr .v { color: var(--hero); }
+
+/* ---------- 컨트롤 ---------- */
+.controls { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 16px; align-items: center; }
+.btn {
+  font-family: inherit; font-size: 15.5px; font-weight: 800; cursor: pointer;
+  border: none; border-radius: 12px; padding: 12px 22px;
+  background: var(--accent); color: #fff;
+  box-shadow: 0 3px 10px rgba(37, 99, 235, .3);
+  transition: transform .15s, filter .15s;
+}
+.btn:hover:not(:disabled) { transform: translateY(-2px); filter: brightness(1.07); }
+.btn:active:not(:disabled) { transform: translateY(0) scale(.97); }
+.btn:disabled { opacity: .35; cursor: not-allowed; }
+.btn.big { font-size: 17px; padding: 13px 30px; }
+.btn.ghost { background: var(--card); color: var(--ink); border: 2px solid var(--line); box-shadow: none; }
+.btn.ghost:hover:not(:disabled) { border-color: var(--accent); }
+.btn.ghost.on { border-color: var(--accent); color: var(--accent-dark); background: #EFF4FE; }
+kbd { font-family: inherit; font-size: 12px; background: rgba(255,255,255,.25); border-radius: 5px; padding: 1px 7px; margin-left: 6px; }
+.btn.ghost kbd { background: var(--bg); color: var(--muted); }
+
+/* ---------- 카운터 & 입력 ---------- */
+.meta-row { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; align-items: center; margin-top: 14px; }
+.counter { font-size: 15px; font-weight: 800; color: var(--muted); background: var(--bg); border-radius: 99px; padding: 6px 16px; }
+.counter b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.numin { display: flex; gap: 8px; align-items: center; }
+.numin input {
+  font-family: inherit; font-size: 15px; width: 190px;
+  border: 2px solid var(--line); border-radius: 10px; padding: 9px 12px;
+  background: var(--card); color: var(--ink);
+}
+.numin input:focus { border-color: var(--accent); outline: none; }
+
+/* ---------- 설명 카드 ---------- */
+.explain {
+  max-width: 980px; margin: 26px auto 0;
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: var(--shadow); padding: 22px 26px;
+}
+.explain h2 { font-size: 19px; font-weight: 900; margin-bottom: 6px; }
+.explain p { font-size: 15.5px; color: var(--muted); }
+.explain b { color: var(--ink); }
+.explain .think { margin-top: 12px; background: #FFFBE8; border: 1.5px solid var(--cmp); border-radius: 10px; padding: 10px 16px; font-size: 15px; color: var(--ink); }
+
+footer { text-align: center; color: var(--muted); font-size: 13.5px; padding: 22px; }
+
+@media (max-width: 640px) {
+  .stage { height: 250px; }
+  .ncard.held { transform: translateY(-42px) scale(1.04); }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>한눈에 보는 <span class="a">정렬 실험실</span></h1>
+  <p class="sub">숫자 카드 5장 — 한 단계씩 눌러 가며 정렬이 "움직이는 모습"을 눈에 새기자</p>
+</header>
+
+<div class="algo-tabs" id="algoTabs">
+  <button class="algo-tab on" data-algo="bubble">🫧 버블 정렬</button>
+  <button class="algo-tab" data-algo="select">👑 선택 정렬</button>
+  <button class="algo-tab" data-algo="insert">🃏 삽입 정렬</button>
+  <button class="algo-tab" data-algo="quick">⚡ 퀵 정렬</button>
+  <button class="algo-tab" data-algo="seq">🚶 순차 탐색</button>
+  <button class="algo-tab" data-algo="bin">✂️ 이진 탐색</button>
+</div>
+
+<main>
+  <div class="stage-wrap">
+    <div class="target" id="targetBanner">🎯 찾을 번호: <b id="targetVal">?</b></div>
+    <div class="stage" id="stage"><div class="baseline"></div></div>
+    <div class="narr" id="narr"></div>
+    <div class="controls">
+      <button class="btn ghost" id="btnReset">◀ 처음부터</button>
+      <button class="btn big" id="btnNext">다음 단계 ▶ <kbd>Space</kbd></button>
+      <button class="btn ghost" id="btnAuto">⏵ 자동 재생</button>
+      <button class="btn ghost" id="btnFast">×2</button>
+    </div>
+    <div class="meta-row">
+      <span class="counter">🔍 비교 <b id="cntCmp">0</b>회</span>
+      <span class="counter" id="swpWrap">↔ 이동 <b id="cntSwp">0</b>회</span>
+      <button class="btn ghost" id="btnShuffle">🎲 새 숫자</button>
+      <span class="numin">
+        <input id="numInput" placeholder="직접 입력: 34,7,88,21,55" aria-label="숫자 5개 직접 입력">
+        <button class="btn ghost" id="btnApply">적용</button>
+      </span>
+    </div>
+  </div>
+
+  <div class="explain" id="explainBox"></div>
+</main>
+
+<footer>한눈에 보는 정렬 실험실 · 수업용 시각화 도구 · 단일 HTML · 오프라인 실행</footer>
+
+<script>
+'use strict';
+
+/* ================================================================
+   설정 · 상태
+================================================================ */
+const N = 5;
+let values = [34, 7, 88, 21, 55];   // 기본 예제
+let algo = 'bubble';
+let steps = [], ptr = 0;             // 사전 생성된 단계 목록
+let cards = [];                      // {id, v, el} — 슬롯 배치는 step이 지시
+let autoTimer = null, fast = false;
+
+const EXPLAIN = {
+  bubble: {
+    h: '🫧 버블 정렬 — 이웃끼리 비교해서 큰 놈을 뒤로',
+    p: '옆 사람과 <b>둘씩만</b> 비교한다. 큰 쪽이 뒤로 가도록 자리를 바꾸며 끝까지 가면, <b>가장 큰 수가 거품처럼 맨 뒤로 떠오른다</b>. 이걸 반복하면 뒤에서부터 정렬 완료!',
+    t: '💭 생각해 보기 — 한 패스가 끝날 때마다 "확정(✓)"되는 위치는 어디일까? 앞일까 뒤일까?' },
+  select: {
+    h: '👑 선택 정렬 — 최솟값을 찾아 맨 앞으로',
+    p: '남은 카드 전체를 훑어 <b>가장 작은 수(👑)</b>를 찾은 뒤, <b>맨 앞과 교환</b>한다. 토너먼트처럼 왕관이 옮겨 다니다가, 최후의 챔피언이 앞자리를 차지한다. 앞에서부터 정렬 완료!',
+    t: '💭 생각해 보기 — 같은 숫자로 버블과 비교해 보자. 비교 횟수는 비슷한데 <b>이동 횟수</b>는 누가 적을까? 왜?' },
+  insert: {
+    h: '🃏 삽입 정렬 — 카드를 뽑아 제자리에 끼워 넣기',
+    p: '트럼프 카드 정리하듯, 카드를 한 장 <b>뽑아 들고</b> 왼쪽의 정리된 구간과 비교하며 <b>큰 카드들을 오른쪽으로 밀고</b> 빈 자리에 끼워 넣는다.',
+    t: '💭 생각해 보기 — 이미 거의 정렬된 숫자(예: 7,21,34,55,88에서 두 개만 바꾼 것)를 입력해 보자. 삽입 정렬이 유난히 빨라지는 이유는?' },
+  quick: {
+    h: '⚡ 퀵 정렬 — 피벗 기준으로 갈라서 정복한다',
+    p: '책 더미를 정리할 때 기준 책 한 권(📍피벗)을 잡고 <b>얇은 책은 왼쪽, 두꺼운 책은 오른쪽</b> 두 무더기로 나눠 보자. 기준 책은 단번에 자기 자리가 확정된다! 나뉜 두 무더기를 또 나누고, 또 나누면(<b>분할 정복</b>) — 어느새 전부 정렬.',
+    t: '💭 생각해 보기 — "반씩 나누기"는 이진 탐색의 ✂️와 닮았다. 왜 반씩 나누면 빠를까? (힌트: 1024 → 512 → 256 → …은 몇 번 만에 1이 될까)' },
+  seq: {
+    h: '🚶 순차 탐색 — 무인 택배함에서 내 상자 찾기',
+    p: '어느 칸인지 모른다면? <b>1번 칸부터 차례대로</b> 열어 보는 수밖에. 정렬이 안 되어 있어도 통하는 우직한 방법이다 — 단, 운이 나쁘면 <b>마지막 칸까지</b> 열어야 한다.',
+    t: '💭 생각해 보기 — 칸이 5개면 최악 5번. 아파트 택배함이 200칸이라면 최악 몇 번? 그래서 어떤 방법이 필요할까? (오른쪽 탭 ✂️)' },
+  bin: {
+    h: '✂️ 이진 탐색 — 업다운 게임 필승법',
+    p: '숫자 맞히기 업다운 게임의 필승법은 <b>가운데를 불러 절반을 통째로 버리는 것</b>. 두꺼운 사전에서 단어를 찾을 때 우리도 이미 이렇게 한다! 단 조건이 하나 — <b>정렬되어 있을 때만</b> 통한다. 그래서 카드를 미리 정렬해 뒀다 (정렬은 탐색을 위한 투자!).',
+    t: '💭 생각해 보기 — 카드 1,024장이어도 이진 탐색은 10번이면 끝난다. 순차 탐색과 비교해 보고, 위 ⚡퀵 정렬의 "반씩 나누기"와 닮은 점을 찾아보자.' },
+};
+
+/* ================================================================
+   단계 생성 — 배열 시뮬레이션하며 카드 id 기준으로 기록
+   step: { t, ...payload, msg }
+   t: compare(a,b슬롯) | swap(a,b) | fix(슬롯) | key(슬롯)/keyclear
+      | pick(슬롯) | shift(from,to) | place(슬롯) | done
+================================================================ */
+function genSteps(vals, kind, target) {
+  const a = vals.map((v, i) => ({ v, id: i }));   // 시뮬레이션 모델
+  const S = [];
+  const vv = i => a[i].v;
+
+  if (kind === 'bubble') {
+    for (let pass = 0; pass < N - 1; pass++) {
+      for (let j = 0; j < N - 1 - pass; j++) {
+        const big = vv(j) > vv(j + 1);
+        S.push({ t: 'compare', i: j, j: j + 1,
+          msg: `🔍 <b>${vv(j)}</b>와 <b>${vv(j + 1)}</b> 비교 — ` + (big
+            ? `<span class="y">${vv(j)}이(가) 크네! 뒤로 보내자</span>` : `<span class="g">이미 작은 게 앞! 그대로</span>`) });
+        if (big) {
+          S.push({ t: 'swap', i: j, j: j + 1, msg: `촵! <b>${vv(j)}</b> ↔ <b>${vv(j + 1)}</b> 자리 교환` });
+          [a[j], a[j + 1]] = [a[j + 1], a[j]];
+        }
+      }
+      S.push({ t: 'fix', i: N - 1 - pass, msg: `✅ <span class="g"><b>${vv(N - 1 - pass)}</b> 자리 확정!</span> 가장 큰 수가 거품처럼 떠올랐다 🫧` });
+    }
+    S.push({ t: 'fix', i: 0, msg: '' });
+  }
+
+  if (kind === 'select') {
+    for (let i = 0; i < N - 1; i++) {
+      let k = i;
+      S.push({ t: 'key', i: k, msg: `👑 ${i + 1}번째 자리 주인 찾기 — 일단 <span class="v"><b>${vv(k)}</b></span>을(를) 후보로!` });
+      for (let j = i + 1; j < N; j++) {
+        const smaller = vv(j) < vv(k);
+        S.push({ t: 'compare', i: j, j: k, keep: k,
+          msg: `🔍 <b>${vv(j)}</b>와 후보 <span class="v"><b>${vv(k)}</b></span> 비교 — ` + (smaller
+            ? `<span class="v">더 작다! 왕관 이동 👑</span>` : `후보 방어 성공`) });
+        if (smaller) { k = j; S.push({ t: 'key', i: k, msg: `👑 새 후보: <span class="v"><b>${vv(k)}</b></span>` }); }
+      }
+      if (k !== i) {
+        S.push({ t: 'swap', i, j: k, msg: `촵! 챔피언 <b>${vv(k)}</b>이(가) ${i + 1}번째 자리로 — <b>${vv(i)}</b>와 교환` });
+        [a[i], a[k]] = [a[k], a[i]];
+      } else {
+        S.push({ t: 'noop', msg: `후보가 이미 제자리에! 교환 없이 통과` });
+      }
+      S.push({ t: 'fix', i, keyclear: true, msg: `✅ <span class="g"><b>${vv(i)}</b> 자리 확정!</span>` });
+    }
+    S.push({ t: 'fix', i: N - 1, msg: '' });
+  }
+
+  if (kind === 'insert') {
+    for (let i = 1; i < N; i++) {
+      const held = a[i];
+      S.push({ t: 'pick', i, msg: `✋ <span class="v"><b>${held.v}</b></span>을(를) 뽑아 들었다 — 왼쪽 정리된 구간에서 자리를 찾자` });
+      let j = i;
+      while (j > 0 && a[j - 1].v > held.v) {
+        S.push({ t: 'compare', i: j - 1, j: null, heldCmp: true,
+          msg: `🔍 왼쪽 <b>${a[j - 1].v}</b>와 비교 — <span class="y">${a[j - 1].v}이(가) 크니까 오른쪽으로 밀기</span>` });
+        S.push({ t: 'shift', from: j - 1, to: j, msg: `촵! <b>${a[j - 1].v}</b>을(를) 한 칸 오른쪽으로` });
+        a[j] = a[j - 1]; j--;
+      }
+      if (j > 0) {
+        S.push({ t: 'compare', i: j - 1, j: null, heldCmp: true,
+          msg: `🔍 왼쪽 <b>${a[j - 1].v}</b>와 비교 — <span class="g">${a[j - 1].v}이(가) 더 작다. 여기가 자리!</span>` });
+      }
+      S.push({ t: 'place', i: j, id: held.id, msg: `🃏 <span class="v"><b>${held.v}</b></span> 내려놓기 — ${j + 1}번째 자리!` });
+      a[j] = held;
+    }
+    for (let i = 0; i < N; i++) S.push({ t: 'fix', i, msg: '' });
+  }
+
+  if (kind === 'quick') {
+    const qs = (lo, hi) => {
+      if (lo > hi) return;
+      if (lo === hi) {
+        S.push({ t: 'range', lo, hi, msg: '' });
+        S.push({ t: 'fix', i: lo, msg: `✅ <span class="g"><b>${vv(lo)}</b>은(는) 혼자 남은 구간 — 자동 확정!</span>` });
+        return;
+      }
+      S.push({ t: 'range', lo, hi, msg: `📦 ${lo + 1}~${hi + 1}번 구간 차례 — 피벗은 맨 뒤 <span class="v"><b>${vv(hi)}</b></span> 📍` });
+      S.push({ t: 'mark', i: hi, ch: '📍', msg: '' });
+      let i = lo;
+      for (let j = lo; j < hi; j++) {
+        const small = vv(j) < vv(hi);
+        S.push({ t: 'compare', i: j, j: hi,
+          msg: `🔍 <b>${vv(j)}</b> vs 피벗 <span class="v"><b>${vv(hi)}</b></span> — ` + (small
+            ? `<span class="y">작다! 왼쪽 팀으로</span>` : `크다 — 오른쪽 팀 대기`) });
+        if (small) {
+          if (i !== j) {
+            S.push({ t: 'swap', i, j, msg: `촵! <b>${vv(j)}</b>을(를) 왼쪽 팀 자리(${i + 1}번)로` });
+            [a[i], a[j]] = [a[j], a[i]];
+          }
+          i++;
+        }
+      }
+      if (i !== hi) {
+        S.push({ t: 'swap', i, j: hi, msg: `📍 피벗 <span class="v"><b>${vv(hi)}</b></span>이(가) 두 팀 사이 자기 자리로 착석!` });
+        [a[i], a[hi]] = [a[hi], a[i]];
+      }
+      S.push({ t: 'markclear', msg: '' });
+      S.push({ t: 'fix', i, msg: `✅ <span class="g">피벗 <b>${vv(i)}</b> 자리 확정!</span> 이제 왼쪽 팀·오른쪽 팀을 각각 또 나눈다 (분할 정복)` });
+      qs(lo, i - 1); qs(i + 1, hi);
+    };
+    qs(0, N - 1);
+    S.push({ t: 'range', lo: 0, hi: N - 1, msg: '' });
+  }
+
+  if (kind === 'seq') {
+    for (let i = 0; i < N; i++) {
+      const hit = vv(i) === target;
+      S.push({ t: 'scheck', i, hit,
+        msg: hit
+          ? `📦 ${i + 1}번 칸 — <span class="g"><b>${vv(i)}</b>! 찾았다 🎯 (${i + 1}번 만에)</span>`
+          : `📦 ${i + 1}번 칸 열기 — <b>${vv(i)}</b>… 아니네, 다음 칸!` });
+      if (hit) break;
+    }
+    S.push({ t: 'sdone', msg: '' });
+  }
+
+  if (kind === 'bin') {
+    let lo = 0, hi = N - 1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (vv(mid) === target) {
+        S.push({ t: 'scheck', i: mid, hit: true, msg: `🎯 가운데 ${mid + 1}번 확인 — <span class="g"><b>${vv(mid)}</b>! 찾았다!</span>` });
+        break;
+      } else if (vv(mid) < target) {
+        S.push({ t: 'scheck', i: mid, hit: false, msg: `🔍 가운데 ${mid + 1}번은 <b>${vv(mid)}</b> — 목표 <b>${target}</b>이 더 크다 → <span class="y">왼쪽 절반은 볼 필요도 없다!</span>` });
+        S.push({ t: 'sdim', lo, hi: mid, msg: `✂️ ${lo + 1}~${mid + 1}번 칸 통째로 배제!` });
+        lo = mid + 1;
+      } else {
+        S.push({ t: 'scheck', i: mid, hit: false, msg: `🔍 가운데 ${mid + 1}번은 <b>${vv(mid)}</b> — 목표 <b>${target}</b>이 더 작다 → <span class="y">오른쪽 절반은 볼 필요도 없다!</span>` });
+        S.push({ t: 'sdim', lo: mid, hi, msg: `✂️ ${mid + 1}~${hi + 1}번 칸 통째로 배제!` });
+        hi = mid - 1;
+      }
+    }
+    S.push({ t: 'sdone', msg: '' });
+  }
+
+  if (kind === 'bubble' || kind === 'select' || kind === 'insert' || kind === 'quick') S.push({ t: 'done', msg: '' });
+  return S;
+}
+
+/* ================================================================
+   무대 렌더링 · 단계 적용
+================================================================ */
+const stage = document.getElementById('stage');
+let cmpCount = 0, swpCount = 0, heldCard = null;
+
+function slotLeft(slot) {
+  const cw = stage.clientWidth / N;
+  return slot * cw + cw * 0.08;
+}
+function cardWidth() { return stage.clientWidth / N * 0.84; }
+
+function buildStage() {
+  stage.querySelectorAll('.ncard, .slot-label').forEach(e => e.remove());
+  const maxV = Math.max(...stageValues);
+  cards = stageValues.map((v, i) => {
+    const el = document.createElement('div');
+    el.className = 'ncard';
+    el.style.setProperty('--cw', cardWidth() + 'px');
+    el.style.width = cardWidth() + 'px';
+    el.style.height = (60 + (v / maxV) * 150) + 'px';
+    el.style.left = slotLeft(i) + 'px';
+    el.innerHTML = '<span class="crown">👑</span>' + v;
+    stage.appendChild(el);
+    return { id: i, v, el, slot: i };
+  });
+  for (let i = 0; i < N; i++) {
+    const lb = document.createElement('div');
+    lb.className = 'slot-label';
+    lb.style.setProperty('--cw', stage.clientWidth / N + 'px');
+    lb.style.width = (stage.clientWidth / N) + 'px';
+    lb.style.left = (i * stage.clientWidth / N) + 'px';
+    lb.textContent = (i + 1) + '번';
+    stage.appendChild(lb);
+  }
+}
+const bySlot = slot => cards.find(c => c.slot === slot);
+
+function clearMarks(keepDone = true) {
+  cards.forEach(c => {
+    c.el.classList.remove('cmp');
+    if (!keepDone) c.el.classList.remove('done', 'key', 'held');
+  });
+}
+
+function applyStep(s) {
+  clearMarks();
+  if (s.t === 'compare') {
+    const A = bySlot(s.i); if (A) A.el.classList.add('cmp');
+    if (s.j !== null && s.j !== undefined) { const B = bySlot(s.j); if (B) B.el.classList.add('cmp'); }
+    if (s.heldCmp && heldCard) heldCard.el.classList.add('held'); // 유지
+    cmpCount++;
+  }
+  if (s.t === 'swap') {
+    const A = bySlot(s.i), B = bySlot(s.j);
+    [A.slot, B.slot] = [B.slot, A.slot];
+    A.el.style.left = slotLeft(A.slot) + 'px';
+    B.el.style.left = slotLeft(B.slot) + 'px';
+    swpCount++;
+  }
+  if (s.t === 'key' || s.t === 'mark') {
+    cards.forEach(c => c.el.classList.remove('key'));
+    const A = bySlot(s.i);
+    A.el.classList.add('key');
+    A.el.querySelector('.crown').textContent = s.t === 'key' ? '👑' : (s.ch || '📍');
+  }
+  if (s.t === 'markclear') cards.forEach(c => c.el.classList.remove('key'));
+  if (s.t === 'range') {
+    cards.forEach(c => {
+      if (c.slot >= s.lo && c.slot <= s.hi) c.el.classList.remove('dim');
+      else if (!c.el.classList.contains('done')) c.el.classList.add('dim');
+      else c.el.classList.remove('dim');
+    });
+  }
+  if (s.t === 'scheck') {
+    const A = bySlot(s.i);
+    A.el.classList.add('cmp');
+    cmpCount++;
+    if (s.hit) { A.el.classList.remove('cmp'); A.el.classList.add('done'); }
+    else if (algo === 'seq') A.el.classList.add('dim');
+  }
+  if (s.t === 'sdim') {
+    for (let k = s.lo; k <= s.hi; k++) { const C = bySlot(k); if (C && !C.el.classList.contains('done')) C.el.classList.add('dim'); }
+  }
+  if (s.t === 'sdone') {
+    const worst = algo === 'seq' ? '1,024번' : '겨우 10번';
+    setNarr(`🏁 <span class="g"><b>탐색 종료!</b></span> 비교 <b>${cmpCount}</b>회. — 카드가 5장이라 시시하다면: <b>1,024장이라면?</b> ${algo === 'seq' ? '순차 탐색은 최악 <b>1,024번</b>' : '이진 탐색은 <b>' + worst + '</b> ✂️'} — 옆 탭과 비교해 보자!`);
+    stopAuto();
+    document.getElementById('btnNext').disabled = true;
+  }
+  if (s.t === 'fix') {
+    if (s.keyclear) cards.forEach(c => c.el.classList.remove('key'));
+    const A = bySlot(s.i); if (A) A.el.classList.add('done');
+  }
+  if (s.t === 'pick') {
+    heldCard = bySlot(s.i);
+    heldCard.slot = -1;                       // 손에 듦
+    heldCard.el.classList.add('held');
+  }
+  if (s.t === 'shift') {
+    const A = bySlot(s.from);
+    A.slot = s.to;
+    A.el.style.left = slotLeft(A.slot) + 'px';
+    swpCount++;
+  }
+  if (s.t === 'place') {
+    heldCard.slot = s.i;
+    heldCard.el.style.left = slotLeft(s.i) + 'px';
+    heldCard.el.classList.remove('held');
+    heldCard = null;
+  }
+  if (s.t === 'done') {
+    cards.forEach(c => c.el.classList.add('done'));
+    setNarr(`🎉 <span class="g"><b>정렬 완료!</b></span> 비교 <b>${cmpCount}</b>회 · 이동 <b>${swpCount}</b>회 — 다른 알고리즘과 같은 숫자로 비교해 보자!`);
+    stopAuto();
+    document.getElementById('btnNext').disabled = true;
+  }
+  if (s.msg) setNarr(s.msg);
+  document.getElementById('cntCmp').textContent = cmpCount;
+  document.getElementById('cntSwp').textContent = swpCount;
+}
+
+function setNarr(html) { document.getElementById('narr').innerHTML = html; }
+
+/* ================================================================
+   흐름 제어
+================================================================ */
+let stageValues = [], target = null;
+function resetRun() {
+  stopAuto();
+  const isSearch = algo === 'seq' || algo === 'bin';
+  document.body.classList.toggle('search', isSearch);
+  stageValues = algo === 'bin' ? [...values].sort((x, y) => x - y) : [...values];
+  target = isSearch ? stageValues[Math.floor(Math.random() * N)] : null;
+  if (isSearch) document.getElementById('targetVal').textContent = target;
+  steps = genSteps(stageValues, algo, target);
+  ptr = 0; cmpCount = 0; swpCount = 0; heldCard = null;
+  buildStage();
+  document.getElementById('cntCmp').textContent = 0;
+  document.getElementById('cntSwp').textContent = 0;
+  document.getElementById('btnNext').disabled = false;
+  const first = { bubble: '🫧 이웃 둘씩 비교해서, 큰 놈을 뒤로! [다음 단계]를 눌러 시작',
+                  select: '👑 남은 카드 중 최솟값을 찾아 맨 앞으로! [다음 단계]를 눌러 시작',
+                  insert: '🃏 카드를 뽑아 왼쪽 정리된 구간에 끼워 넣자! [다음 단계]를 눌러 시작',
+                  quick: '⚡ 피벗(📍)보다 작으면 왼쪽 팀! 나누고 또 나누자 — [다음 단계]로 시작',
+                  seq: `🚶 택배함 ${N}칸 — 목표 <b>${target}</b>을(를) 1번 칸부터 차례로! [다음 단계]로 시작`,
+                  bin: `✂️ 카드는 정렬되어 있다(이진 탐색의 조건!) — 목표 <b>${target}</b>, 가운데부터 공략! [다음 단계]로 시작` };
+  setNarr(first[algo]);
+}
+function next() {
+  if (ptr >= steps.length) return;
+  const s = steps[ptr++];
+  applyStep(s);
+  if (s.msg === '' && ptr < steps.length) next(); // 메시지 없는 정리 단계는 건너뛰듯 연달아
+}
+function stopAuto() {
+  if (autoTimer) { clearInterval(autoTimer); autoTimer = null; }
+  document.getElementById('btnAuto').classList.remove('on');
+  document.getElementById('btnAuto').textContent = '⏵ 자동 재생';
+}
+function toggleAuto() {
+  if (autoTimer) { stopAuto(); return; }
+  document.getElementById('btnAuto').classList.add('on');
+  document.getElementById('btnAuto').textContent = '⏸ 일시정지';
+  autoTimer = setInterval(() => {
+    if (ptr >= steps.length) { stopAuto(); return; }
+    next();
+  }, fast ? 500 : 1000);
+}
+
+/* ================================================================
+   조작부 배선
+================================================================ */
+document.getElementById('btnNext').addEventListener('click', next);
+document.getElementById('btnReset').addEventListener('click', resetRun);
+document.getElementById('btnAuto').addEventListener('click', toggleAuto);
+document.getElementById('btnFast').addEventListener('click', function () {
+  fast = !fast; this.classList.toggle('on', fast);
+  if (autoTimer) { stopAuto(); toggleAuto(); }
+});
+document.getElementById('btnShuffle').addEventListener('click', () => {
+  const pool = [];
+  while (pool.length < N) {
+    const v = 5 + Math.floor(Math.random() * 94);
+    if (!pool.includes(v)) pool.push(v);
+  }
+  values = pool;
+  resetRun();
+});
+document.getElementById('btnApply').addEventListener('click', () => {
+  const raw = document.getElementById('numInput').value.trim();
+  const nums = raw.split(/[,\s]+/).map(Number).filter(n => Number.isInteger(n) && n >= 1 && n <= 99);
+  if (nums.length !== N || new Set(nums).size !== N) {
+    setNarr('⚠️ <b>1~99 사이 서로 다른 숫자 5개</b>를 쉼표로 넣어 주세요 (예: 34,7,88,21,55)');
+    return;
+  }
+  values = nums;
+  resetRun();
+});
+document.querySelectorAll('.algo-tab').forEach(b =>
+  b.addEventListener('click', () => {
+    algo = b.dataset.algo;
+    document.querySelectorAll('.algo-tab').forEach(x => x.classList.toggle('on', x === b));
+    const e = EXPLAIN[algo];
+    document.getElementById('explainBox').innerHTML =
+      `<h2>${e.h}</h2><p>${e.p}</p><div class="think">${e.t}</div>`;
+    resetRun();
+  }));
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return;
+  if (e.key === ' ' || e.key === 'ArrowRight') { e.preventDefault(); next(); }
+});
+window.addEventListener('resize', () => {
+  // 카드 폭·위치 재계산 (진행 상태 유지한 채 재배치)
+  cards.forEach(c => {
+    c.el.style.width = cardWidth() + 'px';
+    if (c.slot >= 0) c.el.style.left = slotLeft(c.slot) + 'px';
+  });
+  stage.querySelectorAll('.slot-label').forEach((lb, i) => {
+    lb.style.width = (stage.clientWidth / N) + 'px';
+    lb.style.left = (i * stage.clientWidth / N) + 'px';
+  });
+});
+
+/* ── 초기화 ── */
+document.querySelector('.algo-tab.on').click();
+</script>
+</body>
+</html>

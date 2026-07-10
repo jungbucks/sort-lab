@@ -1,0 +1,31 @@
+<!DOCTYPE html><meta charset="utf-8">
+<iframe id="f" src="index.html" style="width:1100px;height:900px"></iframe>
+<pre id="out">PENDING</pre>
+<script>
+const out=[]; const log=m=>{out.push(m); document.getElementById('out').textContent=out.join('\n');};
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+document.getElementById('f').onload=async()=>{
+ try{
+  const doc=document.getElementById('f').contentDocument;
+  const run=async(algo)=>{
+    doc.querySelector('.algo-tab[data-algo="'+algo+'"]').click(); await sleep(200);
+    let n=0;
+    while(!doc.getElementById('btnNext').disabled && n<200){ doc.getElementById('btnNext').click(); await sleep(30); n++; }
+    const done=doc.querySelectorAll('.ncard.done').length;
+    const cmp=doc.getElementById('cntCmp').textContent, swp=doc.getElementById('cntSwp').textContent;
+    log(algo+': 클릭 '+n+' · 비교 '+cmp+' · 이동 '+swp+' · 완료카드 '+done+'/5 · 종료 '+doc.getElementById('btnNext').disabled);
+  };
+  await sleep(300);
+  for(const a of ['bubble','select','insert','quick','seq','bin']) await run(a);
+  // 직접 입력 검증
+  doc.querySelector('.algo-tab[data-algo="bubble"]').click(); await sleep(150);
+  doc.getElementById('numInput').value='5,4,3,2,1';
+  doc.getElementById('btnApply').click(); await sleep(150);
+  let n=0; while(!doc.getElementById('btnNext').disabled && n<200){ doc.getElementById('btnNext').click(); await sleep(25); n++; }
+  log('역순 5,4,3,2,1 버블: 비교 '+doc.getElementById('cntCmp').textContent+' (기대 10) · 이동 '+doc.getElementById('cntSwp').textContent+' (기대 10)');
+  const order=[...doc.querySelectorAll('.ncard')].sort((a,b)=>parseFloat(a.style.left)-parseFloat(b.style.left)).map(c=>c.textContent.replace('👑','').replace('📍','').trim());
+  log('최종 순서: '+order.join(',')+' (기대 1,2,3,4,5)');
+  log('DONE');
+ }catch(e){ log('ERR '+e.message); }
+};
+</script>
