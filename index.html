@@ -111,13 +111,14 @@ body.search #swpWrap { display: none; }            /* 탐색 모드엔 이동 �
   margin-top: 16px; min-height: 66px;
   background: linear-gradient(90deg, #EAF0FE, #F6F9FF);
   border-left: 6px solid var(--accent); border-radius: 12px;
-  padding: 15px 20px; font-size: clamp(17px, 2.6vw, 21px); font-weight: 700; line-height: 1.5;
-  display: flex; align-items: center;
+  padding: 15px 20px; font-size: clamp(16px, 2.4vw, 21px); font-weight: 700; line-height: 1.5;
+  display: flex; align-items: center; flex-wrap: wrap;
 }
 .narr b {
   display: inline-block; margin: 0 3px; padding: 1px 9px;
   background: #E6EDFB; color: var(--accent-dark);
   border-radius: 8px; font-weight: 900; font-variant-numeric: tabular-nums;
+  white-space: nowrap;                              /* 칩은 세로로 깨지지 말고 통째로 줄바꿈 */
 }
 .narr .y b { background: #FEF3C7; color: #92400E; }
 .narr .g b { background: #DCFCE7; color: #15803D; }
@@ -491,8 +492,9 @@ function applyStep(s) {
     for (let k = s.lo; k <= s.hi; k++) { const C = bySlot(k); if (C && !C.el.classList.contains('done')) C.el.classList.add('dim'); }
   }
   if (s.t === 'sdone') {
-    const worst = algo === 'seq' ? '1,024번' : '겨우 10번';
-    setNarr(`🏁 <span class="g"><b>탐색 종료!</b></span> 비교 <b>${cmpCount}</b>회. — 카드가 5장이라 시시하다면: <b>1,024장이라면?</b> ${algo === 'seq' ? '순차 탐색은 최악 <b>1,024번</b>' : '이진 탐색은 <b>' + worst + '</b> ✂️'} — 옆 탭과 비교해 보자!`);
+    setNarr(algo === 'seq'
+      ? `🏁 <span class="g"><b>탐색 종료</b></span> · 비교 <b>${cmpCount}</b>회 — 1,024장이면 순차 탐색은 최악 <b>1,024번!</b> ✂️`
+      : `🏁 <span class="g"><b>탐색 종료</b></span> · 비교 <b>${cmpCount}</b>회 — 1,024장이어도 이진 탐색은 <b>단 10번!</b> ✂️`);
     stopAuto();
     document.getElementById('btnNext').disabled = true;
   }
@@ -528,7 +530,7 @@ function applyStep(s) {
   document.getElementById('cntSwp').textContent = swpCount;
 }
 
-function setNarr(html) { document.getElementById('narr').innerHTML = html; }
+function setNarr(html) { document.getElementById('narr').innerHTML = '<span class="narr-line">' + html + '</span>'; }
 
 /* ================================================================
    흐름 제어
