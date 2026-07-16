@@ -19,8 +19,6 @@
   --line: #DBE3EE;
   --accent: #2563EB;        /* UI 조작부 */
   --accent-dark: #1E40AF;
-  --rest1: #AEBFDC;         /* 카드 기본(무상태) 막대 — 위 */
-  --rest2: #8399C0;         /* 카드 기본 막대 — 아래 */
   --cmp: #FACC15;           /* 비교 중 */
   --done: #16A34A;          /* 자리 확정 */
   --done-soft: #E7F6EC;
@@ -63,40 +61,44 @@ main { max-width: 980px; margin: 0 auto; padding: 18px 20px 70px; }
 .baseline { position: absolute; left: 0; right: 0; bottom: 42px; height: 3px; background: var(--line); border-radius: 2px; }
 .slot-label { position: absolute; bottom: 12px; font-size: 14px; font-weight: 800; color: var(--muted); width: var(--cw); text-align: center; }
 
-/* 카드 = 막대(값=높이) + 바닥 명패(숫자는 늘 같은 높이에 정렬 → 한 줄로 스캔) */
+/* 카드 = 균일한 숫자 카드(트럼프 무드) — 값은 크기(그래프)가 아니라 숫자로 읽는다.
+   시각의 주인공은 카드의 "위치 이동 애니메이션"(FLIP + 스칠 때 호핑). 2026-07-16 개편 */
 .ncard {
-  position: absolute; bottom: 45px; width: var(--cw);
-  display: flex; flex-direction: column; justify-content: flex-end;
-  transition: left .28s cubic-bezier(.25, 1, .4, 1), transform .22s ease;
-}
-.ncard .bar {
-  border-radius: 13px 13px 5px 5px;
-  background: linear-gradient(180deg, var(--rest1), var(--rest2));
-  box-shadow: inset 0 2px 0 rgba(255, 255, 255, .4), 0 5px 14px rgba(30, 41, 59, .13);
-  transition: background .2s, box-shadow .2s;
-}
-.ncard .plate {
-  position: relative; height: 50px; margin-top: 5px;
+  position: absolute; bottom: 45px; width: var(--cw); height: 150px;
   display: flex; align-items: center; justify-content: center;
-  background: var(--card); color: var(--ink);
-  font-weight: 900; font-size: clamp(23px, 4vw, 33px); font-variant-numeric: tabular-nums;
-  border: 2px solid var(--line); border-radius: 11px;
-  box-shadow: 0 3px 8px rgba(30, 41, 59, .10);
+  background: linear-gradient(180deg, #FFFFFF, #F3F6FC);
+  border: 2.5px solid var(--line); border-radius: 16px;
+  box-shadow: 0 6px 16px rgba(30, 41, 59, .12), inset 0 2px 0 rgba(255, 255, 255, .85);
+  font-weight: 900; font-size: clamp(30px, 5.5vw, 46px); font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  transition: left .28s cubic-bezier(.25, 1, .4, 1), transform .22s ease,
+              background .2s, border-color .2s, color .2s, box-shadow .2s, opacity .2s;
 }
+/* 트럼프식 코너 숫자 — CSS content라 textContent(프로브)엔 안 잡힘 */
+.ncard::before, .ncard::after {
+  content: attr(data-v); position: absolute; font-size: 14px; font-weight: 800; opacity: .38;
+}
+.ncard::before { top: 6px; left: 10px; }
+.ncard::after { bottom: 6px; right: 10px; transform: rotate(180deg); }
 .ncard .crown { position: absolute; top: -38px; left: 50%; transform: translateX(-50%); font-size: 26px; display: none; }
 .ncard.key .crown { display: block; }
-.ncard.key .bar { background: linear-gradient(180deg, #A78BFA, var(--hero)); }
-.ncard.key .plate { border-color: var(--hero); color: #6D28D9; }
-.ncard.cmp { transform: translateY(-14px); }
-.ncard.cmp .bar { background: linear-gradient(180deg, #FDE047, var(--cmp)); }
-.ncard.cmp .plate { border-color: var(--cmp); background: #FFFBEB; color: #92400E; }
-.ncard.held { transform: translateY(-58px) scale(1.05); z-index: 5; }
-.ncard.held .bar { background: linear-gradient(180deg, #A78BFA, var(--hero)); box-shadow: 0 14px 28px rgba(124, 58, 237, .32); }
-.ncard.held .plate { border-color: var(--hero); color: #6D28D9; }
-.ncard.done .bar { background: linear-gradient(180deg, #4ADE80, var(--done)); }
-.ncard.done .plate { border-color: var(--done); background: var(--done-soft); color: #15803D; }
-.ncard.done .plate::after { content: '✓'; position: absolute; top: 3px; right: 7px; font-size: 13px; font-weight: 900; color: var(--done); }
-.ncard.dim { opacity: .3; }                        /* 탐색 배제 / 퀵 비활성 구간 */
+.ncard.key { border-color: var(--hero); background: linear-gradient(180deg, #F5F3FF, #EDE9FE); color: #6D28D9; }
+.ncard.cmp {
+  transform: translateY(-14px);
+  border-color: var(--cmp); background: linear-gradient(180deg, #FFFBEB, #FEF3C7); color: #92400E;
+  box-shadow: 0 12px 22px rgba(250, 204, 21, .32);
+}
+.ncard.held {
+  transform: translateY(-72px) scale(1.07) rotate(-3deg); z-index: 5;
+  border-color: var(--hero); background: linear-gradient(180deg, #F5F3FF, #EDE9FE); color: #6D28D9;
+  box-shadow: 0 16px 30px rgba(124, 58, 237, .32);
+}
+.ncard.done { border-color: var(--done); background: linear-gradient(180deg, #F0FDF4, #DCFCE7); color: #15803D; }
+.ncard.done .chk::after { content: '✓'; position: absolute; top: 5px; right: 9px; font-size: 15px; font-weight: 900; color: var(--done); }
+.ncard.dim { opacity: .25; }                       /* 탐색 배제 / 퀵 비활성 구간 */
+/* 교환 순간: 한 카드는 위로 넘고, 한 카드는 아래로 스친다 — "촵" */
+.ncard.hop  { transform: translateY(-28px) rotate(2deg); z-index: 4; }
+.ncard.hop2 { transform: translateY(12px) scale(.96); z-index: 1; }
 .target {
   display: none; text-align: center; font-size: 19px; font-weight: 900;
   background: #FFFBE8; border: 2px solid var(--cmp); border-radius: 12px;
@@ -172,7 +174,8 @@ footer { text-align: center; color: var(--muted); font-size: 13.5px; padding: 22
 
 @media (max-width: 640px) {
   .stage { height: 250px; }
-  .ncard.held { transform: translateY(-42px) scale(1.04); }
+  .ncard { height: 118px; }
+  .ncard.held { transform: translateY(-50px) scale(1.04) rotate(-3deg); }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; animation: none !important; }
@@ -419,17 +422,14 @@ function cardWidth() { return stage.clientWidth / N * 0.84; }
 
 function buildStage() {
   stage.querySelectorAll('.ncard, .slot-label').forEach(e => e.remove());
-  const maxV = Math.max(...stageValues);
   cards = stageValues.map((v, i) => {
     const el = document.createElement('div');
     el.className = 'ncard';
+    el.dataset.v = v;                                 // 코너 숫자(CSS content) + 프로브 textContent 오염 방지
     el.style.setProperty('--cw', cardWidth() + 'px');
     el.style.width = cardWidth() + 'px';
     el.style.left = slotLeft(i) + 'px';
-    const barH = Math.round(28 + (v / maxV) * 158);   // 값 크기 = 막대 높이
-    el.innerHTML = '<span class="crown">👑</span>'
-      + '<div class="bar" style="height:' + barH + 'px"></div>'
-      + '<div class="plate">' + v + '</div>';
+    el.innerHTML = '<span class="crown">👑</span><span class="chk"></span>' + v;
     stage.appendChild(el);
     return { id: i, v, el, slot: i };
   });
@@ -465,6 +465,8 @@ function applyStep(s) {
     [A.slot, B.slot] = [B.slot, A.slot];
     A.el.style.left = slotLeft(A.slot) + 'px';
     B.el.style.left = slotLeft(B.slot) + 'px';
+    A.el.classList.add('hop'); B.el.classList.add('hop2');   // 스쳐 지나가는 호핑 연출
+    setTimeout(() => { A.el.classList.remove('hop'); B.el.classList.remove('hop2'); }, 340);
     swpCount++;
   }
   if (s.t === 'key' || s.t === 'mark') {
@@ -511,6 +513,8 @@ function applyStep(s) {
     const A = bySlot(s.from);
     A.slot = s.to;
     A.el.style.left = slotLeft(A.slot) + 'px';
+    A.el.classList.add('hop2');
+    setTimeout(() => A.el.classList.remove('hop2'), 340);
     swpCount++;
   }
   if (s.t === 'place') {
