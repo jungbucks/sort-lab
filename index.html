@@ -158,6 +158,11 @@ kbd { font-family: inherit; font-size: 12px; background: rgba(255,255,255,.25); 
   background: var(--card); color: var(--ink);
 }
 .numin input:focus { border-color: var(--accent); outline: none; }
+.countctl { display: flex; align-items: center; gap: 12px; font-size: 15px; font-weight: 800; color: var(--muted); background: var(--bg); border-radius: 99px; padding: 6px 18px; }
+.countctl b { color: var(--ink); font-variant-numeric: tabular-nums; min-width: 1ch; text-align: center; }
+.countctl input[type=range] { -webkit-appearance: none; appearance: none; width: 124px; height: 7px; border-radius: 99px; background: var(--line); cursor: pointer; }
+.countctl input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 24px; height: 24px; border-radius: 50%; background: var(--accent); border: 3px solid #fff; box-shadow: 0 1px 5px rgba(0,0,0,.28); }
+.countctl input[type=range]::-moz-range-thumb { width: 24px; height: 24px; border: 3px solid #fff; border-radius: 50%; background: var(--accent); box-shadow: 0 1px 5px rgba(0,0,0,.28); }
 
 /* ---------- 설명 카드 ---------- */
 .explain {
@@ -186,7 +191,7 @@ footer { text-align: center; color: var(--muted); font-size: 13.5px; padding: 22
 
 <header>
   <h1>한눈에 보는 <span class="a">정렬 실험실</span></h1>
-  <p class="sub">숫자 카드 5장 — 한 단계씩 눌러 가며 정렬이 "움직이는 모습"을 눈에 새기자</p>
+  <p class="sub">숫자 카드를 한 단계씩 눌러 가며 정렬이 "움직이는 모습"을 눈에 새기자</p>
 </header>
 
 <div class="algo-tabs" id="algoTabs">
@@ -212,6 +217,9 @@ footer { text-align: center; color: var(--muted); font-size: 13.5px; padding: 22
     <div class="meta-row">
       <span class="counter">🔍 비교 <b id="cntCmp">0</b>회</span>
       <span class="counter" id="swpWrap">↔ 이동 <b id="cntSwp">0</b>회</span>
+      <label class="countctl" for="cardCount">카드 수 <b id="cardCountLbl">5</b>
+        <input type="range" id="cardCount" min="3" max="7" step="1" value="5" aria-label="카드 개수 3에서 7까지 선택">
+      </label>
       <button class="btn ghost" id="btnShuffle">🎲 새 숫자</button>
       <span class="numin">
         <input id="numInput" placeholder="직접 입력: 34,7,88,21,55" aria-label="숫자 5개 직접 입력">
@@ -231,7 +239,7 @@ footer { text-align: center; color: var(--muted); font-size: 13.5px; padding: 22
 /* ================================================================
    설정 · 상태
 ================================================================ */
-const N = 5;
+let N = 5;                          // 카드 개수 (슬라이더로 3~7 조절)
 let values = [34, 7, 88, 21, 55];   // 기본 예제
 let algo = 'bubble';
 let steps = [], ptr = 0;             // 사전 생성된 단계 목록
@@ -240,7 +248,7 @@ let autoTimer = null, fast = false;
 
 const EXPLAIN = {
   bubble: {
-    h: '🫧 버블 정렬 — 이웃끼리 비교해서 큰 놈을 뒤로',
+    h: '🫧 버블 정렬 — 이웃끼리 비교해서 큰 수를 뒤로',
     p: '옆 사람과 <b>둘씩만</b> 비교한다. 큰 쪽이 뒤로 가도록 자리를 바꾸며 끝까지 가면, <b>가장 큰 수가 거품처럼 맨 뒤로 떠오른다</b>. 이걸 반복하면 뒤에서부터 정렬 완료!',
     t: '💭 생각해 보기 — 한 패스가 끝날 때마다 "확정(✓)"되는 위치는 어디일까? 앞일까 뒤일까?' },
   select: {
@@ -258,7 +266,7 @@ const EXPLAIN = {
   seq: {
     h: '🚶 순차 탐색 — 무인 택배함에서 내 상자 찾기',
     p: '어느 칸인지 모른다면? <b>1번 칸부터 차례대로</b> 열어 보는 수밖에. 정렬이 안 되어 있어도 통하는 우직한 방법이다 — 단, 운이 나쁘면 <b>마지막 칸까지</b> 열어야 한다.',
-    t: '💭 생각해 보기 — 칸이 5개면 최악 5번. 아파트 택배함이 200칸이라면 최악 몇 번? 그래서 어떤 방법이 필요할까? (오른쪽 탭 ✂️)' },
+    t: '💭 생각해 보기 — 칸이 {N}개면 최악 {N}번. 아파트 택배함이 200칸이라면 최악 몇 번? 그래서 어떤 방법이 필요할까? (오른쪽 탭 ✂️)' },
   bin: {
     h: '✂️ 이진 탐색 — 업다운 게임 필승법',
     p: '숫자 맞히기 업다운 게임의 필승법은 <b>가운데를 불러 절반을 통째로 버리는 것</b>. 두꺼운 사전에서 단어를 찾을 때 우리도 이미 이렇게 한다! 단 조건이 하나 — <b>정렬되어 있을 때만</b> 통한다. 그래서 카드를 미리 정렬해 뒀다 (정렬은 탐색을 위한 투자!).',
@@ -553,7 +561,7 @@ function resetRun() {
   document.getElementById('cntCmp').textContent = 0;
   document.getElementById('cntSwp').textContent = 0;
   document.getElementById('btnNext').disabled = false;
-  const first = { bubble: '🫧 이웃 둘씩 비교해서, 큰 놈을 뒤로! [다음 단계]를 눌러 시작',
+  const first = { bubble: '🫧 이웃 둘씩 비교해서, 큰 수를 뒤로! [다음 단계]를 눌러 시작',
                   select: '👑 남은 카드 중 최솟값을 찾아 맨 앞으로! [다음 단계]를 눌러 시작',
                   insert: '🃏 카드를 뽑아 왼쪽 정리된 구간에 끼워 넣자! [다음 단계]를 눌러 시작',
                   quick: '⚡ 피벗(📍)보다 작으면 왼쪽 팀! 나누고 또 나누자 — [다음 단계]로 시작',
@@ -601,23 +609,57 @@ document.getElementById('btnShuffle').addEventListener('click', () => {
   values = pool;
   resetRun();
 });
+/* 슬라이더·입력 UI와 N 동기화 */
+function syncCountUI() {
+  document.getElementById('cardCount').value = N;
+  document.getElementById('cardCountLbl').textContent = N;
+  const ex = [34, 7, 88, 21, 55, 90, 26].slice(0, N).join(',');
+  const inp = document.getElementById('numInput');
+  inp.placeholder = '직접 입력: ' + ex;
+  inp.setAttribute('aria-label', '숫자 ' + N + '개 직접 입력');
+}
+/* 카드 개수 변경 — 기존값 유지, 늘면 중복 없는 랜덤 추가·줄이면 뒤에서 제거 */
+function applyCount(newN) {
+  N = Math.max(3, Math.min(7, newN | 0));
+  if (values.length > N) values = values.slice(0, N);
+  while (values.length < N) {
+    const v = 5 + Math.floor(Math.random() * 94);
+    if (!values.includes(v)) values.push(v);
+  }
+  syncCountUI();
+  renderExplain();   // 순차탐색 '칸이 N개' 등 동적 문구 갱신
+  resetRun();
+}
 document.getElementById('btnApply').addEventListener('click', () => {
   const raw = document.getElementById('numInput').value.trim();
   const nums = raw.split(/[,\s]+/).map(Number).filter(n => Number.isInteger(n) && n >= 1 && n <= 99);
-  if (nums.length !== N || new Set(nums).size !== N) {
-    setNarr('⚠️ <b>1~99 사이 서로 다른 숫자 5개</b>를 쉼표로 넣어 주세요 (예: 34,7,88,21,55)');
+  if (nums.length < 3 || nums.length > 7 || new Set(nums).size !== nums.length) {
+    setNarr('⚠️ <b>1~99 사이 서로 다른 숫자 3~7개</b>를 쉼표로 넣어 주세요 (예: 34,7,88,21,55)');
     return;
   }
   values = nums;
+  N = nums.length;      // 입력 개수에 맞춰 카드 수 자동 동기화
+  syncCountUI();
+  renderExplain();
   resetRun();
 });
+{
+  const slider = document.getElementById('cardCount');
+  slider.addEventListener('input', () => {
+    document.getElementById('cardCountLbl').textContent = slider.value;
+  });
+  slider.addEventListener('change', () => applyCount(+slider.value));
+}
+function renderExplain() {
+  const e = EXPLAIN[algo];
+  document.getElementById('explainBox').innerHTML =
+    `<h2>${e.h}</h2><p>${e.p}</p><div class="think">${e.t}</div>`.replaceAll('{N}', N);
+}
 document.querySelectorAll('.algo-tab').forEach(b =>
   b.addEventListener('click', () => {
     algo = b.dataset.algo;
     document.querySelectorAll('.algo-tab').forEach(x => x.classList.toggle('on', x === b));
-    const e = EXPLAIN[algo];
-    document.getElementById('explainBox').innerHTML =
-      `<h2>${e.h}</h2><p>${e.p}</p><div class="think">${e.t}</div>`;
+    renderExplain();
     resetRun();
   }));
 document.addEventListener('keydown', e => {
@@ -637,6 +679,7 @@ window.addEventListener('resize', () => {
 });
 
 /* ── 초기화 ── */
+syncCountUI();
 document.querySelector('.algo-tab.on').click();
 </script>
 </body>

@@ -25,6 +25,26 @@ document.getElementById('f').onload=async()=>{
   log('역순 5,4,3,2,1 버블: 비교 '+doc.getElementById('cntCmp').textContent+' (기대 10) · 이동 '+doc.getElementById('cntSwp').textContent+' (기대 10)');
   const order=[...doc.querySelectorAll('.ncard')].sort((a,b)=>parseFloat(a.style.left)-parseFloat(b.style.left)).map(c=>c.textContent.replace('👑','').replace('📍','').trim());
   log('최종 순서: '+order.join(',')+' (기대 1,2,3,4,5)');
+  // 카드 개수 변경 검증 (7개·3개 각각 버블 완주 + 정렬 확인)
+  const setCount=async(k)=>{ const s=doc.getElementById('cardCount'); s.value=k; s.dispatchEvent(new Event('change')); await sleep(150); };
+  for(const k of [7,3]){
+    await setCount(k);
+    doc.querySelector('.algo-tab[data-algo="bubble"]').click(); await sleep(150);
+    let m=0; while(!doc.getElementById('btnNext').disabled && m<300){ doc.getElementById('btnNext').click(); await sleep(18); m++; }
+    const cardsN=doc.querySelectorAll('.ncard').length, doneN=doc.querySelectorAll('.ncard.done').length;
+    const ord=[...doc.querySelectorAll('.ncard')].sort((a,b)=>parseFloat(a.style.left)-parseFloat(b.style.left)).map(c=>c.textContent.replace('👑','').replace('📍','').trim());
+    const sorted=ord.map(Number).every((v,i,arr)=>i===0||arr[i-1]<=v);
+    log('N='+k+' 버블: 카드 '+cardsN+'/'+k+' · 완료 '+doneN+'/'+k+' · 정렬됨 '+sorted+' · 순서 '+ord.join(','));
+  }
+  // 직접입력 개수로 슬라이더 자동 동기화 (6개)
+  doc.querySelector('.algo-tab[data-algo="bubble"]').click(); await sleep(120);
+  doc.getElementById('numInput').value='9,8,7,6,5,4';
+  doc.getElementById('btnApply').click(); await sleep(150);
+  log('입력 6개 자동동기화: 슬라이더 '+doc.getElementById('cardCount').value+' (기대 6) · 카드 '+doc.querySelectorAll('.ncard').length+' (기대 6)');
+  // 순차탐색 설명 동적 치환 확인 (현재 N=6)
+  doc.querySelector('.algo-tab[data-algo="seq"]').click(); await sleep(120);
+  const think=doc.querySelector('.explain .think').textContent;
+  log('순차 설명 동적치환: "'+(think.match(/칸이 \d+개면 최악 \d+번/)||['(없음)'])[0]+'" (기대 칸이 6개면 최악 6번)');
   log('DONE');
  }catch(e){ log('ERR '+e.message); }
 };
