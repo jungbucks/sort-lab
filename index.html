@@ -108,6 +108,16 @@ main { max-width: 980px; margin: 0 auto; padding: 18px 20px 70px; }
 body.search .target { display: block; }
 body.search #swpWrap { display: none; }            /* 탐색 모드엔 이동 카운터 무의미 */
 
+/* 선택정렬 전용 — 최소 후보를 담는 변수(왕관 = 이 변수의 시각화) */
+.minvar {
+  display: none; text-align: center; font-size: 16px; font-weight: 800;
+  background: linear-gradient(180deg, #F5F3FF, #EDE9FE); border: 2px solid var(--hero); color: #6D28D9;
+  border-radius: 12px; padding: 8px 16px; margin-bottom: 14px;
+}
+.minvar b { font-size: 21px; font-variant-numeric: tabular-nums; }
+.minvar .slotn { color: #7C6BAF; font-weight: 700; font-size: 13px; margin-left: 4px; }
+body.select .minvar { display: block; }
+
 /* ---------- 내레이션 ---------- */
 .narr {
   margin-top: 16px; min-height: 66px;
@@ -206,6 +216,7 @@ footer { text-align: center; color: var(--muted); font-size: 13.5px; padding: 22
 <main>
   <div class="stage-wrap">
     <div class="target" id="targetBanner">🎯 찾을 번호: <b id="targetVal">?</b></div>
+    <div class="minvar" id="minVar" aria-live="polite"></div>
     <div class="stage" id="stage"><div class="baseline"></div></div>
     <div class="narr" id="narr"></div>
     <div class="controls">
@@ -304,13 +315,13 @@ function genSteps(vals, kind, target) {
   if (kind === 'select') {
     for (let i = 0; i < N - 1; i++) {
       let k = i;
-      S.push({ t: 'key', i: k, msg: `👑 ${i + 1}번째 자리 주인 찾기 — 일단 <span class="v"><b>${vv(k)}</b></span>을(를) 후보로!` });
+      S.push({ t: 'key', i: k, v: vv(k), msg: `👑 ${i + 1}번째 자리 주인 찾기 — 일단 <span class="v"><b>${vv(k)}</b></span>을(를) 후보로!` });
       for (let j = i + 1; j < N; j++) {
         const smaller = vv(j) < vv(k);
         S.push({ t: 'compare', i: j, j: k, keep: k,
           msg: `🔍 <b>${vv(j)}</b>와 후보 <span class="v"><b>${vv(k)}</b></span> 비교 — ` + (smaller
             ? `<span class="v">더 작다! 왕관 이동 👑</span>` : `후보 방어 성공`) });
-        if (smaller) { k = j; S.push({ t: 'key', i: k, msg: `👑 새 후보: <span class="v"><b>${vv(k)}</b></span>` }); }
+        if (smaller) { k = j; S.push({ t: 'key', i: k, v: vv(k), msg: `👑 새 후보: <span class="v"><b>${vv(k)}</b></span>` }); }
       }
       if (k !== i) {
         S.push({ t: 'swap', i, j: k, msg: `촵! 챔피언 <b>${vv(k)}</b>이(가) ${i + 1}번째 자리로 — <b>${vv(i)}</b>와 교환` });
@@ -482,6 +493,8 @@ function applyStep(s) {
     const A = bySlot(s.i);
     A.el.classList.add('key');
     A.el.querySelector('.crown').textContent = s.t === 'key' ? '👑' : (s.ch || '📍');
+    if (algo === 'select' && s.t === 'key') document.getElementById('minVar').innerHTML =
+      `👑 최소 후보 <b>min = ${s.v}</b> <span class="slotn">${s.i + 1}번 카드</span>`;
   }
   if (s.t === 'markclear') cards.forEach(c => c.el.classList.remove('key'));
   if (s.t === 'range') {
@@ -552,6 +565,9 @@ function resetRun() {
   stopAuto();
   const isSearch = algo === 'seq' || algo === 'bin';
   document.body.classList.toggle('search', isSearch);
+  document.body.classList.toggle('select', algo === 'select');
+  if (algo === 'select') document.getElementById('minVar').innerHTML =
+    `👑 최소 후보 <b>min = ?</b> <span class="slotn">[다음 단계]로 찾기 시작</span>`;
   stageValues = algo === 'bin' ? [...values].sort((x, y) => x - y) : [...values];
   target = isSearch ? stageValues[Math.floor(Math.random() * N)] : null;
   if (isSearch) document.getElementById('targetVal').textContent = target;
