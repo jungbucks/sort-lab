@@ -30,10 +30,12 @@ const H=doc=>{
 function measure(doc){
   const win=doc.defaultView;
   const res={hscroll: doc.documentElement.scrollWidth>win.innerWidth+0.5, textOver:0, cardOverlap:0, labelOverlap:0, labelOver:0, cards:0};
-  const cs=[...doc.querySelectorAll('.ncard')].filter(c=>!c.classList.contains('intemp'));
-  res.cards=cs.length; res.cw=0; res.tw=0;
-  const rects=cs.map(c=>c.getBoundingClientRect()).sort((a,b)=>a.left-b.left);
-  for(let i=1;i<rects.length;i++) if(rects[i].left<rects[i-1].right-0.5) res.cardOverlap++;
+  const cs=[...doc.querySelectorAll('.ncard')];
+  res.cards=cs.length; res.cw=0; res.tw=0; res.inTemp=cs.filter(c=>c.classList.contains('intemp')).length;
+  for(const row of [cs.filter(c=>!c.classList.contains('intemp')), cs.filter(c=>c.classList.contains('intemp'))]){
+    const rects=row.map(c=>c.getBoundingClientRect()).sort((a,b)=>a.left-b.left);
+    for(let i=1;i<rects.length;i++) if(rects[i].left<rects[i-1].right-0.5) res.cardOverlap++;
+  }
   cs.forEach(c=>{ const tn=[...c.childNodes].find(n=>n.nodeType===3); const r=doc.createRange(); r.selectNodeContents(tn); const tr=r.getBoundingClientRect(), cr=c.getBoundingClientRect(); res.cw=Math.round(cr.width); res.tw=Math.max(res.tw,Math.round(tr.width)); if(tr.left<cr.left+2.5||tr.right>cr.right-2.5) res.textOver++; });
   const ls=[...doc.querySelectorAll('.slot-label')].map(l=>{ const r=doc.createRange(); r.selectNodeContents(l); return {t:r.getBoundingClientRect(), b:l.getBoundingClientRect()}; }).sort((a,b)=>a.t.left-b.t.left);
   for(let i=1;i<ls.length;i++) if(ls[i].t.left<ls[i-1].t.right+1) res.labelOverlap++;
@@ -47,11 +49,15 @@ async function layoutAt(W, algos){
   await sleep(250);
   const d=fr.contentDocument, h=H(d);
   await h.setCount(10); await h.apply('34,7,88,21,55,72,44,13,90,26');
+  const tops={};
+  for(const a of ['bubble','select','insert','quick','merge','seq','bin']){ await h.tab(a); await sleep(40); tops[a]=Math.round(d.querySelector('.ncard').getBoundingClientRect().top+d.defaultView.scrollY); }
+  ok(new Set(Object.values(tops)).size===1, `레이아웃 ${W}px: 7개 탭 카드 줄 세로 위치 동일 (${[...new Set(Object.values(tops))].join(',')}px)`);
   for(const a of algos){
     await h.tab(a); await sleep(150);
+    if(a==='merge'){ for(let i=0;i<40;i++) d.getElementById('btnNext').click(); await sleep(400); }   // 임시 줄에 카드가 내려간 상태도 측정
     const m=measure(d);
     ok(m.cards===10 && !m.hscroll && m.textOver===0 && m.cardOverlap===0 && m.labelOverlap===0 && m.labelOver===0,
-      `레이아웃 ${W}px ${a} 10장: 카드 ${m.cards} · 가로스크롤 ${m.hscroll} · 숫자넘침 ${m.textOver} (카드폭 ${m.cw}px·숫자폭 최대 ${m.tw}px) · 카드겹침 ${m.cardOverlap} · 라벨겹침 ${m.labelOverlap}/${m.labelOver}`);
+      `레이아웃 ${W}px ${a} 10장: 카드 ${m.cards}(임시 줄 ${m.inTemp}) · 가로스크롤 ${m.hscroll} · 숫자넘침 ${m.textOver} (카드폭 ${m.cw}px·숫자폭 최대 ${m.tw}px) · 카드겹침 ${m.cardOverlap} · 라벨겹침 ${m.labelOverlap}/${m.labelOver}`);
   }
   fr.remove();
 }
@@ -159,6 +165,112 @@ document.getElementById('f').onload=async()=>{
   doc.dispatchEvent(new KeyboardEvent('keydown',{key:' ',bubbles:true})); await sleep(20);
   doc.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true})); await sleep(20);
   ok(/반으로/.test($('narr').textContent), 'Space·→ 키로 합병 단계 진행');
+
+  /* [C1] 이전 단계: 7개 탭 모두, 매 단계 다음→이전→원상태 동일 */
+  const sig=()=>JSON.stringify({
+    cards:[...doc.querySelectorAll('.ncard')].map(c=>[c.className.split(' ').filter(k=>k!=='hop'&&k!=='hop2').sort().join('.'), c.style.left, c.querySelector('.crown').textContent]),
+    cmp:$('cntCmp').textContent, swp:$('cntSwp').textContent, narr:$('narr').innerHTML, mv:$('minVar').innerHTML,
+    nd:$('btnNext').disabled, ts:[...doc.querySelectorAll('.tslot')].map(t=>t.className).join(','),
+    dv:(doc.querySelector('.divider')||{}).className+'@'+((doc.querySelector('.divider')||{style:{}}).style.left)});
+  await h.apply('34,7,88,21,55,72,44,13');
+  for(const a of [...SORTS,...SEARCHES]){
+    await h.tab(a);
+    const p0=$('btnPrev').disabled;
+    let steps=0, bad=0, firstBad='';
+    while(!$('btnNext').disabled && steps<400){
+      const before=sig();
+      $('btnNext').click(); await sleep(4);
+      const after=sig();
+      $('btnPrev').click(); await sleep(4);
+      if(sig()!==before){ bad++; if(!firstBad) firstBad='step '+steps; }
+      $('btnNext').click(); await sleep(4);
+      if(sig()!==after){ bad++; if(!firstBad) firstBad='redo '+steps; }
+      steps++;
+    }
+    // 끝까지 간 뒤 ← 키로 처음까지 되돌리기
+    let back=0; while(!$('btnPrev').disabled && back<400){ doc.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowLeft',bubbles:true})); await sleep(3); back++; }
+    ok(p0 && bad===0 && back===steps && $('cntCmp').textContent==='0' && !$('btnNext').disabled,
+      `이전 단계 ${a}: ${steps}단계 모두 다음→이전 원상복구 (불일치 ${bad}${firstBad?' @'+firstBad:''}) · ← 키로 ${back}번 되돌려 처음 상태 · 첫 단계에서 비활성 ${p0}`);
+  }
+  // 자동 재생 중 이전 단계 → 일시정지 후 한 단계 뒤로
+  await h.tab('bubble'); $('btnAuto').click(); await sleep(3200);
+  const cmpRun=+$('cntCmp').textContent; $('btnPrev').click(); await sleep(50);
+  const cmpAfter=+$('cntCmp').textContent, autoTxt=$('btnAuto').textContent; await sleep(2200);
+  ok(cmpRun>0 && autoTxt==='자동 재생' && +$('cntCmp').textContent===cmpAfter && cmpAfter<=cmpRun, `자동 재생 중 이전 단계 → 일시정지(${autoTxt}) + 뒤로 (비교 ${cmpRun}→${cmpAfter}, 이후 멈춤)`);
+
+  /* [C2] 결과 비교표 */
+  await h.apply('34,7,88,21,55,72,44,13');
+  const resRow=k=>[...doc.querySelectorAll('.results tr[data-algo="'+k+'"] td')].map(td=>td.textContent);
+  const got={};
+  for(const a of ['bubble','quick','merge']){ await h.tab(a); await h.runAll(); got[a]=[$('cntCmp').textContent,$('cntSwp').textContent]; }
+  const filled=['bubble','quick','merge'].every(a=>resRow(a)[1]===got[a][0] && resRow(a)[2]===got[a][1]);
+  const empty=['select','insert','seq','bin'].every(a=>resRow(a)[1]==='-');
+  ok(filled && empty, '결과표: 버블 '+resRow('bubble').join('|')+' · 퀵 '+resRow('quick').join('|')+' · 합병 '+resRow('merge').join('|')+' · 나머지 "-" '+empty);
+  await h.tab('seq'); await h.runAll();
+  ok(resRow('seq')[1]===$('targetVal').textContent && resRow('seq')[2]===$('cntCmp').textContent, '결과표 탐색 행: 순차 '+resRow('seq').join('|'));
+  $('btnShuffle').click(); await sleep(100);
+  ok([...SORTS,...SEARCHES].every(a=>resRow(a)[1]==='-'), '새 숫자 → 결과표 비움');
+  ok(!/localStorage/.test(doc.documentElement.outerHTML.replace(/localStorage는 쓰지|localStorage 안 씀/g,'')), 'localStorage 사용 없음');
+
+  /* [C3] 조사 */
+  const J=doc.defaultView.jo;
+  const jt=[[88,'와','과'],[34,'이','가'],[21,'을','을'],[7,'와','과'],[2,'을','를'],[10,'은','은'],[5,'은','는'],[100,'이','이'],[9,'와','와'],[1,'로','로'],[3,'로','으로'],[6,'로','으로'],[8,'로','로'],[4,'로','로'],[20,'로','으로'],[17,'로','로'],[13,'을','을'],[44,'을','를']];
+  const jf=jt.filter(([n,t,e])=>J(n,t)!==e);
+  ok(jf.length===0, 'jo() 받침 표 '+jt.length+'건 일치 (불일치 '+jf.map(x=>x.join('')).join(',')+')');
+  await h.apply('34,7,88,21,55,72,44,13');
+  const narrs=[];
+  for(const a of [...SORTS,...SEARCHES]){ await h.tab(a); narrs.push($('narr').textContent); let n=0; while(!$('btnNext').disabled&&n<400){ $('btnNext').click(); await sleep(2); narrs.push($('narr').textContent); n++; } }
+  const all=narrs.join('\n');
+  ok(!/\((가|를|는|을|이|과|와|은)\)/.test(all), '모든 탭 설명에 "(가)·(를)" 표기 없음');
+  ok(/88과 21 비교/.test(all) && /34가 큽니다/.test(all) && /21을 뽑아/.test(all), '"88과 21 비교" · "34가 큽니다" · "21을 뽑아" 확인');
+  let jbad=[]; for(const m of all.matchAll(/(\d+)(와|과|이|가|을|를|은|는)(?=[\s.,!]|$)/g)){ if(J(+m[1],m[2])!==m[2]) jbad.push(m[0]); }
+  ok(jbad.length===0, '설명 속 숫자+조사 '+[...all.matchAll(/(\d+)(와|과|이|가|을|를|은|는)(?=[\s.,!]|$)/g)].length+'건 모두 받침에 맞음 (틀림 '+[...new Set(jbad)].join(',')+')');
+
+  /* [C4] 배속 버튼 */
+  const sp=[]; for(let i=0;i<3;i++){ $('btnFast').click(); sp.push($('btnFast').textContent+'/'+$('btnFast').getAttribute('aria-label')); }
+  ok(sp.join(',')==='×2/재생 속도 ×2,×4/재생 속도 ×4,×1/재생 속도 ×1', '배속 순환 '+sp.join(', '));
+
+  /* [C5] 입력 오류 */
+  await h.tab('bubble');   // 이진 탭은 자동 정렬되므로 입력 순서 확인은 정렬 탭에서
+  const errOf=async t=>{ await h.apply(t); return {msg:$('inputErr').textContent, inv:$('numInput').getAttribute('aria-invalid'), bad:$('numInput').classList.contains('bad')}; };
+  const e1=await errOf('5,5,3,2'), e2=await errOf('100,2,3,4'), e3=await errOf('1,2,3'), e4=await errOf('a,b,c,d');
+  ok(/5가 두 번 들어갔어요/.test(e1.msg) && e1.inv==='true' && e1.bad, '"5,5,3,2" → '+e1.msg+' · aria-invalid '+e1.inv);
+  ok(/100은 1~99 범위를 넘어요/.test(e2.msg) && e2.msg!==e1.msg, '"100,2,3,4" → '+e2.msg);
+  ok(/숫자가 3개예요\. 4~10개를 넣어 주세요/.test(e3.msg), '"1,2,3" → '+e3.msg);
+  ok(/숫자가 아니에요/.test(e4.msg), '"a,b,c,d" → '+e4.msg);
+  ok($('inputErr').getAttribute('aria-live')==='polite', '오류 안내 aria-live');
+  const e5=await errOf('1，2，3，4');
+  ok(e5.msg==='' && e5.inv===null && !e5.bad && h.order().join(',')==='1,2,3,4' && $('cardCount').value==='4', '"1，2，3，4"(전각 쉼표) → 정상 적용 '+h.order().join(','));
+  const e6=await errOf('9 8 7 6 5'); ok(h.order().join(',')==='9,8,7,6,5' && e6.msg==='', '공백 구분 "9 8 7 6 5" 적용 → '+h.order().join(',')+' '+e6.msg);
+
+  /* [C6] 범례·터치 */
+  const LEGEXP={bubble:'cmp,done',select:'cmp,crown,done',insert:'cmp,held,done',quick:'cmp,pivot,dim,done',merge:'cmp,dim,merged,done',seq:'cmp,dim,found',bin:'cmp,dim,found'};
+  let legOk=true, legTxt=[];
+  for(const a of [...SORTS,...SEARCHES]){ await h.tab(a); const ks=[...doc.querySelectorAll('#legend [data-k]')].map(x=>x.dataset.k).join(','); legTxt.push(a+':'+$('legend').textContent); if(ks!==LEGEXP[a]) legOk=false; }
+  ok(legOk, '범례 탭별 항목 ('+legTxt.join(' / ')+')');
+  const touchRule=[...doc.styleSheets[0].cssRules].some(r=>r.media && /hover: none/.test(r.media.mediaText) && /pointer: coarse/.test(r.media.mediaText) && /#btnNext kbd/.test(r.cssText) && /display: none/.test(r.cssText));
+  ok(touchRule, '터치 기기((hover: none) and (pointer: coarse))에서 Space 배지 숨김 규칙');
+
+  /* [C7] 탐색 목표 고르기 · 못 찾음 · 카드 줄 세로 위치 */
+  await h.apply('34,7,88,21,55,72,44,13');
+  await h.tab('seq');
+  const pick=[...doc.querySelectorAll('.ncard')].find(c=>c.dataset.v==='55'); pick.click(); await sleep(80);
+  ok($('targetVal').textContent==='55', '순차: 카드 55 누름 → 찾을 번호 55');
+  await h.runAll(); ok(doc.querySelector('.ncard.done')?.dataset.v==='55' && $('cntCmp').textContent==='5', '순차 55 찾음 (비교 '+$('cntCmp').textContent+', 기대 5)');
+  $('btnReset').click(); await sleep(50); ok($('targetVal').textContent==='55', '처음부터 눌러도 고른 번호 유지');
+  $('btnMissing').click(); await sleep(80);
+  const miss=+$('targetVal').textContent;
+  ok(miss>=1&&miss<=99&&![34,7,88,21,55,72,44,13].includes(miss), '없는 숫자 찾기 → '+miss+' (카드에 없음, 1~99)');
+  await h.runAll(); ok(/없어요/.test($('narr').textContent) && $('cntCmp').textContent==='8' && !doc.querySelector('.ncard.done'), '순차 못 찾음 문구: '+$('narr').textContent.slice(0,50)+'… (비교 '+$('cntCmp').textContent+')');
+  await h.tab('bin'); $('btnMissing').click(); await sleep(80); await h.runAll();
+  ok(/없어요/.test($('narr').textContent) && +$('cntCmp').textContent<=4, '이진 못 찾음 문구: '+$('narr').textContent.slice(0,50)+'… (비교 '+$('cntCmp').textContent+' ≤ 4)');
+  const bc=[...doc.querySelectorAll('.ncard')].find(c=>c.dataset.v==='72'); bc.click(); await sleep(80); await h.runAll();
+  ok($('targetVal').textContent==='72' && doc.querySelector('.ncard.done')?.dataset.v==='72', '이진: 카드 72 눌러 찾기 성공');
+  await h.tab('bubble'); [...doc.querySelectorAll('.ncard')][0].click(); await sleep(50);
+  ok(!doc.body.classList.contains('search') && $('cntCmp').textContent==='0', '정렬 탭에선 카드 눌러도 변화 없음');
+  const cardTop=async a=>{ await h.tab(a); await sleep(30); const c=doc.querySelector('.ncard'); return Math.round(c.getBoundingClientRect().top + doc.defaultView.scrollY); };
+  const tops={}; for(const a of [...SORTS,...SEARCHES]) tops[a]=await cardTop(a);
+  ok(new Set(Object.values(tops)).size===1, '1100px: 7개 탭 카드 줄 세로 위치 동일 '+JSON.stringify(tops));
 
   /* [A2] 레이아웃 390/768/1280 · 10장 */
   for(const W of [390,768,1280]) await layoutAt(W, ['bubble','merge','seq']);
