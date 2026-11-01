@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>한눈에 보는 정렬 실험실</title>
-<meta name="description" content="숫자 카드 3~7장으로 정렬과 탐색의 과정을 한 단계씩 확인하는 수업용 시각화 도구">
+<meta name="description" content="숫자 카드 4~10장으로 정렬과 탐색의 과정을 한 단계씩 확인하는 수업용 시각화 도구">
 <style>
 /* ==========================================================
    한눈에 보는 정렬 실험실. 수업(빔프로젝터) 최적화 시각화 도구
@@ -54,7 +54,8 @@ main { max-width: 980px; margin: 0 auto; padding: 18px 20px 70px; }
 }
 .stage { position: relative; height: 300px; }
 .baseline { position: absolute; left: 0; right: 0; bottom: 42px; height: 3px; background: var(--line); border-radius: 2px; }
-.slot-label { position: absolute; bottom: 12px; font-size: 14px; font-weight: 800; color: var(--muted); width: var(--cw); text-align: center; }
+.slot-label { position: absolute; bottom: 12px; font-size: 14px; font-weight: 800; color: var(--muted); width: var(--sw); text-align: center; white-space: nowrap; }
+.stage.tight .slot-label { font-size: 12px; letter-spacing: -.02em; }
 
 /* 카드 = 균일한 숫자 카드(트럼프 무드). 값은 크기(그래프)가 아니라 숫자로 읽는다.
    시각의 주인공은 카드의 "위치 이동 애니메이션"(FLIP + 스칠 때 호핑). 2026-07-16 개편 */
@@ -62,9 +63,11 @@ main { max-width: 980px; margin: 0 auto; padding: 18px 20px 70px; }
   position: absolute; bottom: 45px; width: var(--cw); height: 150px;
   display: flex; align-items: center; justify-content: center;
   background: #FFFFFF;
-  border: 2.5px solid var(--line); border-radius: 16px;
+  border: 2.5px solid var(--line); border-radius: clamp(8px, calc(var(--cw) * .2), 16px);
   box-shadow: 0 3px 6px rgba(30,41,59,.07);
-  font-weight: 900; font-size: clamp(30px, 5.5vw, 46px); font-variant-numeric: tabular-nums;
+  /* 글자 크기 = 카드 폭에 비례(--cw는 JS layout()이 컨테이너 폭/카드 수로 계산). 두 자리가 카드 안에 들어가게 */
+  font-weight: 900; font-size: clamp(15px, calc((var(--cw) - 8px) * .68), 46px); font-variant-numeric: tabular-nums;
+  letter-spacing: -.02em; white-space: nowrap;
   color: var(--ink);
   transition: left .28s cubic-bezier(.25, 1, .4, 1), transform .22s ease,
               background .2s, border-color .2s, color .2s, box-shadow .2s, opacity .2s;
@@ -75,6 +78,8 @@ main { max-width: 980px; margin: 0 auto; padding: 18px 20px 70px; }
 }
 .ncard::before { top: 6px; left: 10px; }
 .ncard::after { bottom: 6px; right: 10px; transform: rotate(180deg); }
+.stage.tight .ncard::before, .stage.tight .ncard::after { display: none; }   /* 좁은 카드: 코너 숫자 숨김 */
+.stage.tight .ncard.done .chk::after { right: 50%; transform: translateX(50%); top: 2px; font-size: 12px; }
 .ncard .crown { position: absolute; top: -38px; left: 50%; transform: translateX(-50%); font-size: 26px; display: none; }
 .ncard.key .crown { display: block; }
 .ncard.key { border-color: var(--hero); background: #F2EDFC; color: #6D28D9; }
@@ -125,6 +130,7 @@ body.select .minvar { display: block; }
 .narr .g b { background: #DCFCE7; color: #15803D; }
 .narr .v b { background: #EDE4FE; color: #6D28D9; }
 .narr .y, .narr .g, .narr .v { margin: 0 5px; }
+.narr .narr-note { display: block; width: 100%; font-size: .78em; font-weight: 700; color: var(--accent-dark); }
 .narr .y { color: #B45309; } .narr .g { color: #15803D; } .narr .v { color: #6D28D9; }
 
 /* ---------- 컨트롤 ---------- */
@@ -183,7 +189,7 @@ body{word-break:keep-all;overflow-wrap:break-word;}
 .narr b{padding:0 4px;border-radius:4px;}
 .minvar,.target{text-align:left;border-width:1px;border-radius:8px;}
 @media(max-width:640px){
- header{padding-top:24px;}.algo-tabs{gap:0;}.algo-tab{padding:10px 12px;font-size:15px;}
+ header{padding:24px 16px 8px;}main{padding-left:16px;padding-right:16px;}.algo-tabs{gap:0;padding:0 16px;}.algo-tab{padding:10px 12px;font-size:15px;}
  .stage-wrap{padding:20px 12px 16px;}.explain{padding:20px 16px;}
  .controls{gap:8px;}.btn{padding:10px 14px;}.btn.big{padding:11px 18px;}
  .numin{max-width:100%;}.numin input{min-width:0;max-width:100%;width:180px;}
@@ -223,12 +229,12 @@ body{word-break:keep-all;overflow-wrap:break-word;}
     <div class="meta-row">
       <span class="counter">비교 <b id="cntCmp">0</b>회</span>
       <span class="counter" id="swpWrap">↔ 이동 <b id="cntSwp">0</b>회</span>
-      <label class="countctl" for="cardCount">카드 수 <b id="cardCountLbl">5</b>
-        <input type="range" id="cardCount" min="3" max="7" step="1" value="5" aria-label="카드 개수 3에서 7까지 선택">
+      <label class="countctl" for="cardCount">카드 수 <b id="cardCountLbl">8</b>
+        <input type="range" id="cardCount" min="4" max="10" step="1" value="8" aria-label="카드 개수 4에서 10까지 선택">
       </label>
       <button class="btn ghost" id="btnShuffle">새 숫자</button>
       <span class="numin">
-        <input id="numInput" placeholder="직접 입력: 34,7,88,21,55" aria-label="숫자 5개 직접 입력">
+        <input id="numInput" placeholder="직접 입력: 34,7,88,21,55,72,44,13" aria-label="숫자 8개 직접 입력">
         <button class="btn ghost" id="btnApply">적용</button>
       </span>
     </div>
@@ -245,8 +251,9 @@ body{word-break:keep-all;overflow-wrap:break-word;}
 /* ================================================================
    설정 · 상태
 ================================================================ */
-let N = 5;                          // 카드 개수 (슬라이더로 3~7 조절)
-let values = [34, 7, 88, 21, 55];   // 기본 예제
+const N_MIN = 4, N_MAX = 10;
+let N = 8;                          // 카드 개수 (슬라이더로 4~10 조절)
+let values = [34, 7, 88, 21, 55, 72, 44, 13];   // 기본 예제 (서로 다른 1~99, 정렬 안 됨)
 let algo = 'bubble';
 let steps = [], ptr = 0;             // 사전 생성된 단계 목록
 let cards = [];                      // {id, v, el}. 슬롯 배치는 step이 지시
@@ -264,7 +271,7 @@ const EXPLAIN = {
   insert: {
     h: '정리된 구간에 카드 끼워 넣기',
     p: '트럼프 카드 정리하듯, 카드를 한 장 <b>뽑아 들고</b> 왼쪽의 정리된 구간과 비교하며 <b>큰 카드들을 오른쪽으로 밀고</b> 빈 자리에 끼워 넣는다.',
-    t: '생각해 보기: 이미 거의 정렬된 숫자(예: 7,21,34,55,88에서 두 개만 바꾼 것)를 입력해 보자. 삽입 정렬이 유난히 빨라지는 이유는?' },
+    t: '생각해 보기: 이미 거의 정렬된 숫자(예: 7,13,21,34,44,55,72,88에서 두 개만 바꾼 것)를 입력해 보자. 삽입 정렬이 유난히 빨라지는 이유는?' },
   quick: {
     h: '피벗을 기준으로 구간 나누기',
     p: '책 더미를 정리할 때 기준 책 한 권(📍피벗)을 잡고 <b>얇은 책은 왼쪽, 두꺼운 책은 오른쪽</b> 두 무더기로 나눠 보자. 기준 책은 단번에 자기 자리가 확정된다! 나뉜 두 무더기를 또 나누고, 또 나누면(<b>분할 정복</b>). 어느새 전부 정렬.',
@@ -428,20 +435,25 @@ function genSteps(vals, kind, target) {
 const stage = document.getElementById('stage');
 let cmpCount = 0, swpCount = 0, heldCard = null;
 
-function slotLeft(slot) {
-  const cw = stage.clientWidth / N;
-  return slot * cw + cw * 0.08;
+/* 반응형 배치: 슬롯 폭 = 컨테이너 폭 / 카드 수. 간격·카드 폭·글자 크기(CSS calc)가 여기서 따라 정해진다 */
+const LAYOUT = { sw: 0, gap: 0, cw: 0 };
+function layout() {
+  const sw = stage.clientWidth / N;
+  const gap = Math.max(4, Math.min(16, sw * 0.14));
+  LAYOUT.sw = sw; LAYOUT.gap = gap; LAYOUT.cw = sw - gap;
+  stage.style.setProperty('--sw', sw + 'px');
+  stage.style.setProperty('--cw', LAYOUT.cw + 'px');
+  stage.classList.toggle('tight', LAYOUT.cw < 60);   // 좁은 카드: 코너 숫자 숨김·라벨 축소
 }
-function cardWidth() { return stage.clientWidth / N * 0.84; }
+function slotLeft(slot) { return slot * LAYOUT.sw + LAYOUT.gap / 2; }
 
 function buildStage() {
   stage.querySelectorAll('.ncard, .slot-label').forEach(e => e.remove());
+  layout();
   cards = stageValues.map((v, i) => {
     const el = document.createElement('div');
     el.className = 'ncard';
     el.dataset.v = v;                                 // 코너 숫자(CSS content) + 프로브 textContent 오염 방지
-    el.style.setProperty('--cw', cardWidth() + 'px');
-    el.style.width = cardWidth() + 'px';
     el.style.left = slotLeft(i) + 'px';
     el.innerHTML = '<span class="crown">👑</span><span class="chk"></span>' + v;
     stage.appendChild(el);
@@ -450,9 +462,7 @@ function buildStage() {
   for (let i = 0; i < N; i++) {
     const lb = document.createElement('div');
     lb.className = 'slot-label';
-    lb.style.setProperty('--cw', stage.clientWidth / N + 'px');
-    lb.style.width = (stage.clientWidth / N) + 'px';
-    lb.style.left = (i * stage.clientWidth / N) + 'px';
+    lb.style.left = (i * LAYOUT.sw) + 'px';
     lb.textContent = (i + 1) + '번';
     stage.appendChild(lb);
   }
@@ -611,41 +621,43 @@ document.getElementById('btnFast').addEventListener('click', function () {
   fast = !fast; this.classList.toggle('on', fast);
   if (autoTimer) { stopAuto(); toggleAuto(); }
 });
-document.getElementById('btnShuffle').addEventListener('click', () => {
+/* 서로 다른 무작위 숫자 n개 */
+function randomSet(n) {
   const pool = [];
-  while (pool.length < N) {
+  while (pool.length < n) {
     const v = 5 + Math.floor(Math.random() * 94);
     if (!pool.includes(v)) pool.push(v);
   }
-  values = pool;
+  return pool;
+}
+document.getElementById('btnShuffle').addEventListener('click', () => {
+  values = randomSet(N);
   resetRun();
 });
 /* 슬라이더·입력 UI와 N 동기화 */
+const EXAMPLE = [34, 7, 88, 21, 55, 72, 44, 13, 90, 26];
 function syncCountUI() {
   document.getElementById('cardCount').value = N;
   document.getElementById('cardCountLbl').textContent = N;
-  const ex = [34, 7, 88, 21, 55, 90, 26].slice(0, N).join(',');
   const inp = document.getElementById('numInput');
-  inp.placeholder = '직접 입력: ' + ex;
+  inp.placeholder = '직접 입력: ' + EXAMPLE.slice(0, N).join(',');
   inp.setAttribute('aria-label', '숫자 ' + N + '개 직접 입력');
 }
-/* 카드 개수 변경. 기존값 유지, 늘면 중복 없는 랜덤 추가·줄이면 뒤에서 제거 */
+/* 카드 개수 변경 = 새 무작위 세트 + 안내 한 줄 + 직접 입력 칸 비우기 */
 function applyCount(newN) {
-  N = Math.max(3, Math.min(7, newN | 0));
-  if (values.length > N) values = values.slice(0, N);
-  while (values.length < N) {
-    const v = 5 + Math.floor(Math.random() * 94);
-    if (!values.includes(v)) values.push(v);
-  }
+  N = Math.max(N_MIN, Math.min(N_MAX, newN | 0));
+  values = randomSet(N);
+  document.getElementById('numInput').value = '';
   syncCountUI();
   renderExplain();   // 순차탐색 '칸이 N개' 등 동적 문구 갱신
   resetRun();
+  setNarr('<span class="narr-note">카드 수가 바뀌어 새 숫자를 만들었어요.</span>' + document.querySelector('#narr .narr-line').innerHTML);
 }
 document.getElementById('btnApply').addEventListener('click', () => {
   const raw = document.getElementById('numInput').value.trim();
   const nums = raw.split(/[,\s]+/).map(Number).filter(n => Number.isInteger(n) && n >= 1 && n <= 99);
-  if (nums.length < 3 || nums.length > 7 || new Set(nums).size !== nums.length) {
-    setNarr('⚠️ <b>1~99 사이 서로 다른 숫자 3~7개</b>를 쉼표로 넣어 주세요 (예: 34,7,88,21,55)');
+  if (nums.length < N_MIN || nums.length > N_MAX || new Set(nums).size !== nums.length) {
+    setNarr(`⚠️ <b>1~99 사이 서로 다른 숫자 ${N_MIN}~${N_MAX}개</b>를 쉼표로 넣어 주세요 (예: 34,7,88,21,55,72,44,13)`);
     return;
   }
   values = nums;
@@ -679,14 +691,9 @@ document.addEventListener('keydown', e => {
 });
 window.addEventListener('resize', () => {
   // 카드 폭·위치 재계산 (진행 상태 유지한 채 재배치)
-  cards.forEach(c => {
-    c.el.style.width = cardWidth() + 'px';
-    if (c.slot >= 0) c.el.style.left = slotLeft(c.slot) + 'px';
-  });
-  stage.querySelectorAll('.slot-label').forEach((lb, i) => {
-    lb.style.width = (stage.clientWidth / N) + 'px';
-    lb.style.left = (i * stage.clientWidth / N) + 'px';
-  });
+  layout();
+  cards.forEach(c => { if (c.slot >= 0) c.el.style.left = slotLeft(c.slot) + 'px'; });
+  stage.querySelectorAll('.slot-label').forEach((lb, i) => { lb.style.left = (i * LAYOUT.sw) + 'px'; });
 });
 
 /* ── 초기화 ── */

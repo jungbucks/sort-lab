@@ -1,51 +1,120 @@
 <!DOCTYPE html><meta charset="utf-8">
-<iframe id="f" src="index.html" style="width:1100px;height:900px"></iframe>
+<!-- 정렬 실험실 자동 검증. 실행:
+  msedge --headless --disable-gpu --allow-file-access-from-files --virtual-time-budget=120000 --dump-dom probe.html
+  결과는 <pre id="out">의 PASS/FAIL 줄과 마지막 요약 줄. -->
+<iframe id="f" src="index.html" style="width:1100px;height:1100px"></iframe>
+<div id="lay"></div>
 <pre id="out">PENDING</pre>
 <script>
-const out=[]; const log=m=>{out.push(m); document.getElementById('out').textContent=out.join('\n');};
+const out=[]; let pass=0, fail=0;
+const log=m=>{out.push(m); document.getElementById('out').textContent=out.join('\n');};
+const ok=(cond,m)=>{ if(cond){pass++; log('PASS '+m);} else {fail++; log('FAIL '+m);} };
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const SORTS=['bubble','select','insert','quick'];
+const SEARCHES=['seq','bin'];
+
+/* ---------- 공통 헬퍼 (문서 doc 기준) ---------- */
+const H=doc=>{
+  const $=id=>doc.getElementById(id);
+  const tab=async a=>{ doc.querySelector('.algo-tab[data-algo="'+a+'"]').click(); await sleep(120); };
+  const runAll=async(lim=600)=>{ let n=0; while(!$('btnNext').disabled && n<lim){ $('btnNext').click(); await sleep(12); n++; } return n; };
+  const mainCards=()=>[...doc.querySelectorAll('.ncard')].filter(c=>!c.classList.contains('intemp'));
+  const order=()=>mainCards().sort((a,b)=>parseFloat(a.style.left)-parseFloat(b.style.left)).map(c=>Number([...c.childNodes].filter(n=>n.nodeType===3).map(n=>n.textContent).join('').trim()));
+  const sorted=arr=>arr.every((v,i)=>i===0||arr[i-1]<v);
+  const apply=async txt=>{ $('numInput').value=txt; $('btnApply').click(); await sleep(120); };
+  const setCount=async k=>{ const s=$('cardCount'); s.value=k; s.dispatchEvent(new Event('input')); s.dispatchEvent(new Event('change')); await sleep(150); };
+  return {$,tab,runAll,order,sorted,apply,setCount,mainCards};
+};
+
+/* ---------- 레이아웃 측정: 가로 스크롤·카드 숫자 넘침·카드/라벨 겹침 ---------- */
+function measure(doc){
+  const win=doc.defaultView;
+  const res={hscroll: doc.documentElement.scrollWidth>win.innerWidth+0.5, textOver:0, cardOverlap:0, labelOverlap:0, labelOver:0, cards:0};
+  const cs=[...doc.querySelectorAll('.ncard')].filter(c=>!c.classList.contains('intemp'));
+  res.cards=cs.length; res.cw=0; res.tw=0;
+  const rects=cs.map(c=>c.getBoundingClientRect()).sort((a,b)=>a.left-b.left);
+  for(let i=1;i<rects.length;i++) if(rects[i].left<rects[i-1].right-0.5) res.cardOverlap++;
+  cs.forEach(c=>{ const tn=[...c.childNodes].find(n=>n.nodeType===3); const r=doc.createRange(); r.selectNodeContents(tn); const tr=r.getBoundingClientRect(), cr=c.getBoundingClientRect(); res.cw=Math.round(cr.width); res.tw=Math.max(res.tw,Math.round(tr.width)); if(tr.left<cr.left+2.5||tr.right>cr.right-2.5) res.textOver++; });
+  const ls=[...doc.querySelectorAll('.slot-label')].map(l=>{ const r=doc.createRange(); r.selectNodeContents(l); return {t:r.getBoundingClientRect(), b:l.getBoundingClientRect()}; }).sort((a,b)=>a.t.left-b.t.left);
+  for(let i=1;i<ls.length;i++) if(ls[i].t.left<ls[i-1].t.right+1) res.labelOverlap++;
+  ls.forEach(l=>{ if(l.t.left<l.b.left-0.5||l.t.right>l.b.right+0.5) res.labelOver++; });
+  return res;
+}
+async function layoutAt(W, algos){
+  const fr=document.createElement('iframe'); fr.style.width=W+'px'; fr.style.height='1000px'; fr.style.border='0';
+  document.getElementById('lay').appendChild(fr);
+  await new Promise(r=>{ fr.onload=r; fr.src='index.html'; });
+  await sleep(250);
+  const d=fr.contentDocument, h=H(d);
+  await h.setCount(10); await h.apply('34,7,88,21,55,72,44,13,90,26');
+  for(const a of algos){
+    await h.tab(a); await sleep(150);
+    const m=measure(d);
+    ok(m.cards===10 && !m.hscroll && m.textOver===0 && m.cardOverlap===0 && m.labelOverlap===0 && m.labelOver===0,
+      `레이아웃 ${W}px ${a} 10장: 카드 ${m.cards} · 가로스크롤 ${m.hscroll} · 숫자넘침 ${m.textOver} (카드폭 ${m.cw}px·숫자폭 최대 ${m.tw}px) · 카드겹침 ${m.cardOverlap} · 라벨겹침 ${m.labelOverlap}/${m.labelOver}`);
+  }
+  fr.remove();
+}
+
 document.getElementById('f').onload=async()=>{
  try{
-  const doc=document.getElementById('f').contentDocument;
-  const run=async(algo)=>{
-    doc.querySelector('.algo-tab[data-algo="'+algo+'"]').click(); await sleep(200);
-    let n=0;
-    while(!doc.getElementById('btnNext').disabled && n<200){ doc.getElementById('btnNext').click(); await sleep(30); n++; }
-    const done=doc.querySelectorAll('.ncard.done').length;
-    const cmp=doc.getElementById('cntCmp').textContent, swp=doc.getElementById('cntSwp').textContent;
-    log(algo+': 클릭 '+n+' · 비교 '+cmp+' · 이동 '+swp+' · 완료카드 '+done+'/5 · 종료 '+doc.getElementById('btnNext').disabled);
-  };
+  const doc=document.getElementById('f').contentDocument, h=H(doc), $=h.$;
   await sleep(300);
-  for(const a of ['bubble','select','insert','quick','seq','bin']) await run(a);
-  // 직접 입력 검증
-  doc.querySelector('.algo-tab[data-algo="bubble"]').click(); await sleep(150);
-  doc.getElementById('numInput').value='5,4,3,2,1';
-  doc.getElementById('btnApply').click(); await sleep(150);
-  let n=0; while(!doc.getElementById('btnNext').disabled && n<200){ doc.getElementById('btnNext').click(); await sleep(25); n++; }
-  log('역순 5,4,3,2,1 버블: 비교 '+doc.getElementById('cntCmp').textContent+' (기대 10) · 이동 '+doc.getElementById('cntSwp').textContent+' (기대 10)');
-  const order=[...doc.querySelectorAll('.ncard')].sort((a,b)=>parseFloat(a.style.left)-parseFloat(b.style.left)).map(c=>c.textContent.replace('👑','').replace('📍','').trim());
-  log('최종 순서: '+order.join(',')+' (기대 1,2,3,4,5)');
-  // 카드 개수 변경 검증 (7개·3개 각각 버블 완주 + 정렬 확인)
-  const setCount=async(k)=>{ const s=doc.getElementById('cardCount'); s.value=k; s.dispatchEvent(new Event('change')); await sleep(150); };
-  for(const k of [7,3]){
-    await setCount(k);
-    doc.querySelector('.algo-tab[data-algo="bubble"]').click(); await sleep(150);
-    let m=0; while(!doc.getElementById('btnNext').disabled && m<300){ doc.getElementById('btnNext').click(); await sleep(18); m++; }
-    const cardsN=doc.querySelectorAll('.ncard').length, doneN=doc.querySelectorAll('.ncard.done').length;
-    const ord=[...doc.querySelectorAll('.ncard')].sort((a,b)=>parseFloat(a.style.left)-parseFloat(b.style.left)).map(c=>c.textContent.replace('👑','').replace('📍','').trim());
-    const sorted=ord.map(Number).every((v,i,arr)=>i===0||arr[i-1]<=v);
-    log('N='+k+' 버블: 카드 '+cardsN+'/'+k+' · 완료 '+doneN+'/'+k+' · 정렬됨 '+sorted+' · 순서 '+ord.join(','));
+
+  /* [A1] 기본값·범위·라벨 */
+  ok(doc.querySelectorAll('.ncard').length===8, '처음 열면 카드 8장 ('+doc.querySelectorAll('.ncard').length+')');
+  ok(h.order().join(',')==='34,7,88,21,55,72,44,13', '기본 숫자 세트 34,7,88,21,55,72,44,13 ('+h.order().join(',')+')');
+  const sl=$('cardCount');
+  ok(sl.min==='4' && sl.max==='10' && sl.value==='8', '슬라이더 범위 4~10, 기본 8 ('+sl.min+'~'+sl.max+', '+sl.value+')');
+  ok(/4.*10/.test(sl.getAttribute('aria-label')), '슬라이더 aria-label 새 범위 ('+sl.getAttribute('aria-label')+')');
+  ok($('numInput').getAttribute('aria-label')==='숫자 8개 직접 입력', '입력 aria-label "숫자 8개 직접 입력"');
+  ok($('numInput').placeholder.split(':')[1].split(',').length===8, 'placeholder 예시 8개 ('+$('numInput').placeholder+')');
+  ok(!/3~7/.test(doc.documentElement.outerHTML), '문서에 옛 범위 "3~7" 문구 없음');
+
+  /* 기존 탭 완주 (기본 8장) */
+  for(const a of SORTS){
+    await h.tab(a); const n=await h.runAll();
+    const done=doc.querySelectorAll('.ncard.done').length, ord=h.order();
+    ok(done===8 && $('btnNext').disabled && h.sorted(ord), `${a} 8장 완주: 클릭 ${n} · 비교 ${$('cntCmp').textContent} · 이동 ${$('cntSwp').textContent} · 완료 ${done}/8 · 순서 ${ord.join(',')}`);
   }
-  // 직접입력 개수로 슬라이더 자동 동기화 (6개)
-  doc.querySelector('.algo-tab[data-algo="bubble"]').click(); await sleep(120);
-  doc.getElementById('numInput').value='9,8,7,6,5,4';
-  doc.getElementById('btnApply').click(); await sleep(150);
-  log('입력 6개 자동동기화: 슬라이더 '+doc.getElementById('cardCount').value+' (기대 6) · 카드 '+doc.querySelectorAll('.ncard').length+' (기대 6)');
-  // 순차탐색 설명 동적 치환 확인 (현재 N=6)
-  doc.querySelector('.algo-tab[data-algo="seq"]').click(); await sleep(120);
+  for(const a of SEARCHES){
+    await h.tab(a); const n=await h.runAll();
+    ok($('btnNext').disabled && /탐색 종료/.test($('narr').textContent), `${a} 완주: 클릭 ${n} · 비교 ${$('cntCmp').textContent} · 목표 ${$('targetVal').textContent}`);
+  }
+
+  /* 역순 회귀: 버블 5장 10/10, 8장 28/28 */
+  await h.tab('bubble');
+  await h.apply('5,4,3,2,1'); await h.runAll();
+  ok($('cntCmp').textContent==='10' && $('cntSwp').textContent==='10' && h.order().join(',')==='1,2,3,4,5', '역순 5장 버블 비교 '+$('cntCmp').textContent+'/이동 '+$('cntSwp').textContent+' (기대 10/10) · '+h.order().join(','));
+  await h.apply('8,7,6,5,4,3,2,1'); await h.runAll();
+  ok($('cntCmp').textContent==='28' && $('cntSwp').textContent==='28', '역순 8장 버블 비교 '+$('cntCmp').textContent+'/이동 '+$('cntSwp').textContent+' (기대 28/28)');
+
+  /* [A3] 슬라이더 = 새 무작위 세트 + 안내 + 입력칸 비움 */
+  await h.apply('1,2,3,4');
+  ok($('cardCount').value==='4' && doc.querySelectorAll('.ncard').length===4, '입력 4개 → 슬라이더 4 자동 동기화');
+  $('numInput').value='1,2,3,4';
+  await h.setCount(7);
+  const o7=h.order();
+  ok(o7.length===7 && !(o7[0]===1&&o7[1]===2&&o7[2]===3&&o7[3]===4), '슬라이더 7 → 새 무작위 7장 (1,2,3,4 이어붙이기 아님): '+o7.join(','));
+  ok($('numInput').value==='', '슬라이더 변경 시 직접 입력 칸 비움');
+  ok(/카드 수가 바뀌어 새 숫자를 만들었어요/.test($('narr').textContent), '설명 칸 안내 "카드 수가 바뀌어 새 숫자를 만들었어요"');
+  ok(new Set(o7).size===7 && o7.every(v=>v>=1&&v<=99), '새 세트 서로 다른 1~99');
+  for(const k of [10,4]){
+    await h.setCount(k); await h.tab('bubble'); await h.runAll();
+    const ord=h.order();
+    ok(ord.length===k && doc.querySelectorAll('.ncard.done').length===k && h.sorted(ord), `N=${k} 버블 완주·정렬 ${ord.join(',')}`);
+  }
+
+  /* 설명 패널 동적 숫자 */
+  await h.setCount(6); await h.tab('seq');
   const think=doc.querySelector('.explain .think').textContent;
-  log('순차 설명 동적치환: "'+(think.match(/칸이 \d+개면 최악 \d+번/)||['(없음)'])[0]+'" (기대 칸이 6개면 최악 6번)');
+  ok(/칸이 6개면 최악 6번/.test(think), '순차 설명 동적치환 "칸이 6개면 최악 6번"');
+
+  /* [A2] 레이아웃 390/768/1280 · 10장 */
+  for(const W of [390,768,1280]) await layoutAt(W, ['bubble','seq']);
+
+  log('SUMMARY PASS '+pass+' / FAIL '+fail);
   log('DONE');
- }catch(e){ log('ERR '+e.message); }
+ }catch(e){ log('ERR '+e.message+' '+e.stack); log('SUMMARY PASS '+pass+' / FAIL '+(fail+1)); }
 };
 </script>
