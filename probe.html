@@ -10,7 +10,7 @@ const out=[]; let pass=0, fail=0;
 const log=m=>{out.push(m); document.getElementById('out').textContent=out.join('\n');};
 const ok=(cond,m)=>{ if(cond){pass++; log('PASS '+m);} else {fail++; log('FAIL '+m);} };
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-const SORTS=['bubble','select','insert','quick'];
+const SORTS=['bubble','select','insert','quick','merge'];
 const SEARCHES=['seq','bin'];
 
 /* ---------- 공통 헬퍼 (문서 doc 기준) ---------- */
@@ -110,8 +110,58 @@ document.getElementById('f').onload=async()=>{
   const think=doc.querySelector('.explain .think').textContent;
   ok(/칸이 6개면 최악 6번/.test(think), '순차 설명 동적치환 "칸이 6개면 최악 6번"');
 
+  /* [B] 합병 정렬 */
+  const tabOrder=[...doc.querySelectorAll('.algo-tab')].map(b=>b.textContent.trim()).join(',');
+  ok(tabOrder==='버블 정렬,선택 정렬,삽입 정렬,퀵 정렬,합병 정렬,순차 탐색,이진 탐색', '탭 순서 '+tabOrder);
+  // 독립 참조 구현(하향식, 같으면 왼쪽 먼저): 비교·이동(임시 줄로 옮긴 횟수) 계산
+  const refMerge=arr=>{ const a=[...arr]; let cmp=0, mv=0; const ms=(lo,hi)=>{ if(lo>=hi) return; const mid=(lo+hi)>>1; ms(lo,mid); ms(mid+1,hi); const t=[]; let i=lo,j=mid+1; while(i<=mid&&j<=hi){ cmp++; t.push(a[i]<=a[j]?a[i++]:a[j++]); mv++; } while(i<=mid){t.push(a[i++]);mv++;} while(j<=hi){t.push(a[j++]);mv++;} for(let k=lo;k<=hi;k++) a[k]=t[k-lo]; }; ms(0,a.length-1); return {cmp,mv,a}; };
+  const mergeCase=async(label, input)=>{
+    if(input) await h.apply(input);
+    await h.tab('merge');
+    const vals=h.order(), ref=refMerge(vals);
+    let n=0, sawTemp=false, sawDiv=false, sawMerged=false, earlyDone=false;
+    while(!$('btnNext').disabled && n<800){
+      $('btnNext').click(); await sleep(6); n++;
+      if(doc.querySelector('.ncard.intemp')) sawTemp=true;
+      if(doc.querySelector('.divider.show')) sawDiv=true;
+      if(doc.querySelector('.ncard.merged')) sawMerged=true;
+      if(!$('btnNext').disabled && doc.querySelector('.ncard.done')) earlyDone=true;
+    }
+    const ord=h.order(), N=vals.length, done=doc.querySelectorAll('.ncard.done').length;
+    const cmp=+$('cntCmp').textContent, mv=+$('cntSwp').textContent;
+    ok(h.sorted(ord) && done===N && cmp===ref.cmp && mv===ref.mv && !earlyDone && doc.querySelectorAll('.ncard.intemp').length===0,
+      `합병 ${label} (${N}장): 순서 ${ord.join(',')} · 비교 ${cmp}(참조 ${ref.cmp}) · 이동 ${mv}(참조 ${ref.mv}) · ✓ ${done}/${N} · 중간확정 ${earlyDone}`);
+    return {sawTemp,sawDiv,sawMerged,cmp,mv};
+  };
+  await h.setCount(8); await h.apply('34,7,88,21,55,72,44,13');
+  await h.tab('merge'); await sleep(100);
+  ok(doc.querySelectorAll('.tslot').length===8, '합병 탭: 임시 줄 칸 8개');
+  $('btnNext').click(); await sleep(30);
+  ok(/1~8번을 반으로: 1~4번 \| 5~8번/.test($('narr').textContent) && doc.querySelector('.divider.show'), '첫 단계 "1~8번을 반으로: 1~4번 | 5~8번" + 세로 구분선');
+  const m8=await mergeCase('기본', null);
+  ok(m8.sawTemp && m8.sawDiv && m8.sawMerged, `합병 진행 중 임시 줄 사용 ${m8.sawTemp} · 구분선 ${m8.sawDiv} · 정리된 무더기 색 ${m8.sawMerged}`);
+  ok(/정렬 완료! 비교 \d+회 · 이동 \d+회/.test($('narr').textContent), '합병 완료 문구 "정렬 완료! 비교 N회 · 이동 M회" ('+$('narr').textContent.slice(0,40)+')');
+  await h.tab('bubble'); ok(doc.querySelectorAll('.tslot').length===0, '다른 탭에선 임시 줄 없음');
+  await mergeCase('4장', '40,3,25,17');
+  await mergeCase('10장', '34,7,88,21,55,72,44,13,90,26');
+  await mergeCase('이미 정렬', '7,13,21,34,44,55,72,88');
+  const rv=await mergeCase('역순', '8,7,6,5,4,3,2,1');
+  ok(rv.cmp===12, '콘솔 테스트: 8장 역순 합병 비교 '+rv.cmp+' = 참조 구현 '+refMerge([8,7,6,5,4,3,2,1]).cmp+' (손계산 4+4+4=12)');
+  console.log('[merge reverse-8] app cmp', rv.cmp, 'ref cmp', refMerge([8,7,6,5,4,3,2,1]).cmp);
+  await mergeCase('홀수 7장', '61,5,38,92,17,44,29');
+  // 자동 재생·키보드 (합병 탭)
+  await h.apply('34,7,88,21,55,72,44,13'); await h.tab('merge');
+  $('btnAuto').click(); await sleep(3500);
+  const autoCmp=+$('cntCmp').textContent; const autoOn=$('btnAuto').textContent;
+  $('btnAuto').click(); await sleep(50);
+  ok(autoOn==='일시정지' && (autoCmp>0 || doc.querySelector('.ncard.intemp')||doc.querySelector('.ncard.dim')) && $('btnAuto').textContent==='자동 재생', '합병 자동 재생/일시정지 동작');
+  await h.tab('merge');
+  doc.dispatchEvent(new KeyboardEvent('keydown',{key:' ',bubbles:true})); await sleep(20);
+  doc.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true})); await sleep(20);
+  ok(/반으로/.test($('narr').textContent), 'Space·→ 키로 합병 단계 진행');
+
   /* [A2] 레이아웃 390/768/1280 · 10장 */
-  for(const W of [390,768,1280]) await layoutAt(W, ['bubble','seq']);
+  for(const W of [390,768,1280]) await layoutAt(W, ['bubble','merge','seq']);
 
   log('SUMMARY PASS '+pass+' / FAIL '+fail);
   log('DONE');
